@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-I.
+CFLAGS=-lE4235
 DEP=funcs.h
 
 OBJ=main.o funcs.o
