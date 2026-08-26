@@ -1,25 +1,28 @@
-CC=gcc
-DEBUG=-g
-#CFLAGS=-lE4235
-#DEP=funcs.h
+# Ask the system for its CPU architecture
+ARCH := $(shell uname -m)
 
-TARGET=main.s
+# If the architecture is the 32-bit Raspberry Pi
+ifeq ($(ARCH), armv7l)
+	CC = gcc
+	AS = as
+	EMU = 
+	RUN_CMD = ./main
+else
+# Otherwise, we are inside the Docker container
+	CC = arm-linux-gnueabihf-gcc
+	AS = arm-linux-gnueabihf-as
+endif
 
-#pattern rule. creates <target.o> from <source.s>
-#%.o: %.s
-#gcc -c <source.s> -o <target.o>
-#	$(CC) -c $< -o $@
+all: main
 
-#compiles and creates exe from first argument in target var with debug flag.
-#saves exe as "main"
-main: $(TARGET)
-#gcc -g main.s -o main
-	$(CC) $(DEBUG) $< -o $@
+main: main.o
+	$(CC) -g -o main main.o
 
-#run rule
+main.o: main.s
+	$(AS) -g -o main.o main.s
+
 run: main
-	./main
+	$(RUN_CMD)
 
-#cleans dir. removes <source.s> and exe <main> files
 clean:
-	rm -f main
+	rm -f main main.o
