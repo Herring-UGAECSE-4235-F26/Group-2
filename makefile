@@ -13,4 +13,4 @@ run: main
 	./main
 
 clean:
-	rm -f $(OBJ) main
+	rm -f main

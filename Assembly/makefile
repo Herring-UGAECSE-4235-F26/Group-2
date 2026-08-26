@@ -22,4 +22,4 @@ run: main
 
 #cleans dir. removes <source.s> and exe <main> files
 clean:
-	rm -f $(TARGET) main
+	rm -f main
