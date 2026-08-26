@@ -20,7 +20,3 @@
 .vscode/*.njsproj
 .vscode/*.sln
  .vscode/*
-
-# Docker / Dev Container environments
-.devcontainer/
-docker/
