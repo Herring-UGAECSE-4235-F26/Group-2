@@ -8,7 +8,7 @@
 	.text
 
 	.include "printloop.s"
-	extern main
+	.extern main
 
 	.global _start
 
