@@ -6,7 +6,8 @@
 @Deliverable 2: your code on github and in your writeup.  We will check in class and look at accuracy as well.
 
 	.text
-	
+
+	.include "printloop.s"
 	extern main
 
 	.global _start
