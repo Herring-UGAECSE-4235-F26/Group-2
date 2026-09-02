@@ -1,26 +1,22 @@
 /* Attempting to output loop counter with printf */
+        .text
+        .global printCount
 
-        .global main
-        .func main
+        .extern hundredthsSec
+        .extern seconds
+        .extern minutes
 
-main:
+printCount:
         PUSH {LR}
         BAL _loop
 
 _loop:
         LDR R0, =string         @ seed printf
-        LDR R1, =iterations
-        LDR R1, [R1]            @ seed printf
-        BL printf
+        LDR R1, =secondLevelCounter      @r1 points to firstLevelCounter
+        LDR R1, [R1]            @r1 is set to the value of firstLevelCounter
+        BL printf       @prints firstLevelCounter value
 
-        LDR R1, =iterations
-        LDR R1, [R1]
-        SUBS R1, #0x1
-        LDR R2, =iterations
-        STR R1, [R2]            @ write back
-
-        BEQ _exit
-        BNE _loop
+        BAL _exit
 
 _exit:
         POP {PC}
@@ -29,5 +25,4 @@ _exit:
 .data
 string:
         .asciz "%d\n"
-iterations:
-        .word 5                 @ remaining loop iterations
+        
