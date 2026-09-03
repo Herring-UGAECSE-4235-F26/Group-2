@@ -2,10 +2,10 @@
         .text
         .global printCount
 
-        .extern hundredthsSec
+ /*      .extern hundredthsSec
         .extern seconds
         .extern minutes
-
+*/
 printCount:
         PUSH {LR}
         BAL _loop
