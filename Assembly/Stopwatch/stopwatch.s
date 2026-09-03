@@ -49,12 +49,14 @@ nanoLoop:
 	str r7, [r4]	@ store value of r7 into value of hundredthsSec mem location
 	cmp r7, #100	@subtracts 100 from r7 and sets the flags
 	bne	resetNano			@ repeat it until r7 = 100
+	mov r7, #0	@resets hundredthsSec count
 
 	add r8, r8, #1	@adds one to seconds
 	ldr r4, =seconds	@ load address of seconds into r4
 	str r8, [r4]	@ store value of r8 into value of seconds mem location
 	cmp r8, #60
 	bne resetNano
+	mov r8, #0	@resets seconds count
 
 	add r9, r9, #1	@adds one to minutes
 	ldr r4, =minutes	@ load address of minutes into r4
