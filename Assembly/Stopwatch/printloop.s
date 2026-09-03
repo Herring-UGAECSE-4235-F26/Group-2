@@ -11,11 +11,18 @@ printCount:
         BAL _loop
 
 _loop:
-        LDR R0, =string         @ seed printf
-        LDR R1, =hundredthsSec      @r1 points to hundredthsSec
-        LDR R1, [R1]            @r1 is set to the value of hundredthsSec
-        BL printf       @prints hundredthsSec value
-
+        LDR R0, =indent         @prints stored string indent
+        LDR R1, =minutes      @r1 points to minutes
+        LDR R1, [R1]            @r1 is set to the value of minutes
+        BL printf
+        ldr r0, =colon         @prints stored string colon
+        LDR R1, =seconds        @loads address of seconds
+        LDR R1, [R1]    @stores value of seconds
+        BL printf
+        ldr r0, =colon         @prints stored string colon
+        LDR R1, =hundredthsSec        @loads address of hundredthsSec
+        LDR R1, [R1]    @stores value of hundredthsSec
+        BL printf
         BAL _exit
 
 _exit:
@@ -23,6 +30,7 @@ _exit:
         MOV PC, LR
 
 .data
-string:
+indent:
         .asciz "%d\n"
-        
+colon:
+        .asciz ":"
