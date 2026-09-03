@@ -21,8 +21,9 @@ minutes:
 
 	.text
 	.extern printCount
+	.global main
 
-main: 
+main:
 	ldr r7, =hundredthsSec	@ load address of hundredthsSec into r7
 	ldr	r7, [r7] @ loads value of address into r7
 	ldr r8, =seconds	@ load address of seconds into r8
@@ -36,31 +37,30 @@ resetClock:
 	mov r9, #0
 
 resetNano:
+	bl printCount
 	ldr r6, =nanoCounter	@ load address of nanoCounter into r1
 	ldr r6, [r6] @load value of address into r1
-	BL printCount
 
 nanoLoop:
 	subs r6, r6, #1		@ r1 = r1 – 1, decrement r1 (inner loop) 
 	bne	nanoLoop			@ repeat it until r1 = 0 
-
 	add	r7, r7, #1		@ r7 = r7 + 1, increment r7 (outer loop)
-	ldr r3, =hundredthsSec	@ load address of hundredthsSec into r3
-	str r7, [r3]	@ store value of r7 into value of hundredthsSec mem location
+	ldr r4, =hundredthsSec	@ load address of hundredthsSec into r4
+	str r7, [r4]	@ store value of r7 into value of hundredthsSec mem location
 	cmp r7, #100	@subtracts 100 from r7 and sets the flags
 	bne	resetNano			@ repeat it until r7 = 100
 
-	ldr r3, =seconds	@ load address of seconds into r3
-	str r8, [r3]	@ store value of r8 into value of seconds mem location
+	ldr r4, =seconds	@ load address of seconds into r4
+	str r8, [r4]	@ store value of r8 into value of seconds mem location
 	cmp r8, #60
 	bne resetNano
 
-	ldr r3, =minutes	@ load address of minutes into r3
-	str r9, [r3]	@ store value of r9 into value of minutes mem location
+	ldr r4, =minutes	@ load address of minutes into r4
+	str r9, [r4]	@ store value of r9 into value of minutes mem location
 	cmp r9, #2	@subtracts 2 from r9 and sets the flags
 	bne resetNano
 
 	beq resetClock	@resets clock upon reaching 2 mins
-	
+
 	mov r7, #1
 	svc 0

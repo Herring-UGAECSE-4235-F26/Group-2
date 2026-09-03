@@ -11,17 +11,13 @@ printCount:
         BAL _loop
 
 _loop:
-        LDR R0, =indent         @prints stored string indent
+        ldr R0, =formatString       @prints stored string indent
         LDR R1, =minutes      @r1 points to minutes
         LDR R1, [R1]            @r1 is set to the value of minutes
-        BL printf
-        ldr r0, =colon         @prints stored string colon
-        LDR R1, =seconds        @loads address of seconds
-        LDR R1, [R1]    @stores value of seconds
-        BL printf
-        ldr r0, =colon         @prints stored string colon
-        LDR R1, =hundredthsSec        @loads address of hundredthsSec
-        LDR R1, [R1]    @stores value of hundredthsSec
+        ldr R2, =seconds      @r2 points to seconds
+        LDR R2, [R2]            @r2 is set to the value of seconds
+        ldr R3, =hundredthsSec      @r3 points to hundredthsSec
+        LDR R3, [R3]            @r3 is set to the value of hundredthsSec
         BL printf
         BAL _exit
 
@@ -30,7 +26,5 @@ _exit:
         MOV PC, LR
 
 .data
-indent:
-        .asciz "%d\n"
-colon:
-        .asciz ":"
+formatString:
+        .asciz "%02d:%02d:%02d\n"
