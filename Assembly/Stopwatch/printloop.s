@@ -12,9 +12,9 @@ printCount:
 
 _loop:
         LDR R0, =string         @ seed printf
-        LDR R1, =secondLevelCounter      @r1 points to firstLevelCounter
-        LDR R1, [R1]            @r1 is set to the value of firstLevelCounter
-        BL printf       @prints firstLevelCounter value
+        LDR R1, =hundredthsSec      @r1 points to hundredthsSec
+        LDR R1, [R1]            @r1 is set to the value of hundredthsSec
+        BL printf       @prints hundredthsSec value
 
         BAL _exit
 
