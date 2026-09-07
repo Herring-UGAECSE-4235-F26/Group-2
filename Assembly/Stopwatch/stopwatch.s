@@ -11,7 +11,7 @@
 	.global minutes
 
 nanoCounter:	@nanosecond counter
-	.word 10000000	@loads origional value of 1000000000 into the counter
+	.word 7393000	@loads original value of 7393000 into the counter
 hundredthsSec:
 	.word 0
 seconds:
