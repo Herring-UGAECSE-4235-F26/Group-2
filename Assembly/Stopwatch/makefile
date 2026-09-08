@@ -1,5 +1,4 @@
-OBJS = stopwatch.o
-DEPS = printloop.o
+OBJS = stopwatchV2.o
 
 ifdef DEBUG
 DEBUGFLGS = -g
@@ -9,9 +8,9 @@ endif
 
 %.o : %.s
 	as $(DEBUGFLGS) $< -o $@
-main: $(OBJS) $(DEPS)
+main: $(OBJS)
 	gcc -o printloop $(OBJS) $(DEPS)
 run: main
-	./printloop
+	./stopwatchV2
 clean:
-	rm *.o printloop
+	rm *.o stopwatchV2
