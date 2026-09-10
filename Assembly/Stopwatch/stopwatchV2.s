@@ -151,3 +151,14 @@ stopState:
     beq clearState
     
     b stopState
+
+
+checkKey:
+    ldr r0, =inputFormat @r0 = "%c"
+    ldr r1, =inputChar   @r1 = address where scanf stores the char
+    bl scanf
+
+    ldr r1, =inputChar
+    ldrb r10, [r1]  @r10 = character entered
+
+    bx lr
