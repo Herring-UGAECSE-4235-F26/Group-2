@@ -4,6 +4,20 @@
 formatString:
         .asciz "%02d:%02d:%02d\r"
 
+@ formatting key input as string
+inputFormat:
+    .asciz "%c"
+
+@ Holds the keyboard input
+inputChar:
+    .byte 0
+
+@ Creating state variables
+.equ STATE_CLEAR, 0
+.equ STATE_RUN, 1
+.equ STATE_LAP, 2
+.equ STATE_STOP, 3
+
 @ prog loop counter for nanoseconds
 timingLoop:
     .word 7393000
@@ -16,7 +30,9 @@ main:
     mov r9, #0    @ minutes
     mov r8, #0    @ seconds
     mov r7, #0    @ hundredths of a second
-
+   
+    @Start in CLEAR
+    b clearState
 @ prints out the clock values using printf. printf uses 4 arguments, r0-3, for print
 printClock:
     ldr r0, =formatString   @first arg is formatted string
@@ -56,3 +72,45 @@ updateTime:
 
     mov r7, #1
     svc 0
+
+
+@ When C is pressed, enters this state
+clearState:
+    mov r9, #0
+    mov r8, #0
+    mov r7, #0
+    
+    bl printClock
+
+
+@ While in clearState, waits for any input to update the state 
+clearWait:
+    bl getKey
+
+    cmp r10, #'R'
+    beq runState
+
+    b clearWait
+runState:
+    bl getKey
+
+    @if L is pressed, go to lapState
+    cmp r10, #'L'
+    beq lapState
+
+    @if C is pressed go to clearState
+    cmp r10, #'C'
+    beq clearState
+
+    @if S is pressed, go to stopState
+    cmp r10, #'S'
+    beq stopState
+
+    @otherwise continue updating clock
+    bl updateTime
+
+    b runState
+
+
+lapState:
+stopState:
