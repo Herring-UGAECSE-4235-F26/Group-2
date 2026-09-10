@@ -109,8 +109,45 @@ runState:
     @otherwise continue updating clock
     bl updateTime
 
+    bl printClock
+
     b runState
 
 
 lapState:
+    bl checkKey
+
+    cmp r10, #'R'
+    beq lapRun
+
+    @if L is pressed, go to lapState, does nothing
+    cmp r10, #'L'
+    beq lapState
+
+    @if C is pressed go to clearState
+    cmp r10, #'C'
+    beq clearState
+
+    @if S is pressed, go to stopState
+    cmp r10, #'S'
+    beq stopState
+
+    bl updateTime
+
+    b lapState
+
+lapRun:
+    bl printClock
+    b runState
 stopState:
+    bl printClock
+
+    bl checkKey
+    
+    cmp r10, #'R'
+    beq runState
+
+    cmp r10, #'C'
+    beq clearState
+    
+    b stopState
