@@ -36,12 +36,14 @@ main:
     ldr r0, =disableEcho
     bl system
 
+    @initializes stopwatch values to zero
     mov r9, #0    @ minutes
     mov r8, #0    @ seconds
     mov r7, #0    @ hundredths of a second
    
     @Start in CLEAR
     b clearState
+
 @ prints out the clock values using printf. printf uses 4 arguments, r0-3, for print
 printClock:
     ldr r0, =formatString   @first arg is formatted string
@@ -57,14 +59,16 @@ printClock:
 
     b initNanoCount
 
+
+@Prints the current stopwatch time without starting the timer
 printOnly:
     push {lr}
 
-    ldr r0, =formatString
-    mov r1, r9
-    mov r2, r8
-    mov r3, r7
-    bl printf
+    ldr r0, =formatString  @first arg is formatted string
+    mov r1, r9             @second arg is value of minutes
+    mov r2, r8             @third arg is value of seconds
+    mov r3, r7             @fourth arg is value is value of hundredthsSec
+    bl printf              @branches to print
 
     pop {lr}
     bx lr
@@ -83,20 +87,17 @@ nanoLoop:
 updateTime:
     add r7, r7, #1  @adds 1 to hundredths of a second
     cmp r7, #100    @compares hundredths of a second to 100
-    blt checkRunKey    @ if hundredths of a second < 100, branch to initNanoCount
-    @blt printClock
+    blt checkRunKey    @ if hundredths of a second < 100, checks for input
+    
     mov r7, #0
     add r8, r8, #1  @adds 1 to seconds
     cmp r8, #60  @compares seconds to 60
-    blt checkRunKey
-    @blt initNanoCount  @ if less than, jumps to main instruction set and adds 8 to the PC 
+    blt checkRunKey @if less than 60, checks for input
     mov r8, #0  @ resets seconds
     add r9, r9, #1  @adds 1 to minutes
-    cmp r9, #60  @compares minutes to 2
+    cmp r9, #60  @compares minutes to 60
     blt checkRunKey
-    @blt initNanoCount  @ if less than, jumps to main instruction set and adds 4 to the PC
-    @bl main @ if equal to two, branches to top of main and resets everything.
-
+    
     @mov r7, #1
     @svc 0
     b clearState
@@ -110,15 +111,16 @@ clearState:
     bl printOnly
 
 
-@ While in clearState, waits for any input to update the state 
+@ While in clearState, waits for R to update the state 
 clearWait:
     bl checkKey
 
-    cmp r10, #'R'
-    beq runState
+    cmp r10, #'R' @Checks for R key
+    beq runState  @Starts stopwatch if R is pressed
 
     b clearWait
 
+@Checks for keyboard input while stopwatch is running
 checkRunKey:
     bl checkKey
 
@@ -130,19 +132,23 @@ checkRunKey:
     cmp r10, #'C'
     beq clearState
 
-    @@if S is pressed, go to stopState
+    @if S is pressed, go to stopState
     cmp r10, #'S'
     beq stopState
 
+    @ No input, Continue time
     b printClock
 
+@Starts or resumes normal stopwatch 
 runState:
     b initNanoCount
 
+@Timing loop used when displaying a lap time
 lapNanoCount:
     ldr r6, =timingLoop
     ldr r6, [r6]
 
+@Creates the timing delay for LAP mode
 lapNanoLoop:
     subs r6, r6, #1
     bne lapNanoLoop
@@ -163,9 +169,11 @@ lapNanoLoop:
 
     b clearState
 
+@Handles keyboard input while in LAP mode
 lapState:
     bl checkKey
 
+    @if R is pressed, go to runState
     cmp r10, #'R'
     beq lapRun
 
@@ -181,14 +189,19 @@ lapState:
     cmp r10, #'S'
     beq stopState
 
+    @ No input, Continue time
     b lapNanoCount
 
+@ Displays the lap time and resumes normal timing
 lapRun:
     bl printClock
     b initNanoCount
+
+@Displays the current time and waits for input, timing ends
 stopState:
     bl printOnly
 
+@Waits for R and C while stopwatch is waiting for input, L does nothing
 stopWait:
     bl checkKey
 
@@ -203,29 +216,14 @@ stopWait:
 
     b stopWait
 
-
+@Reads a keyboard character and stores it in r10
 checkKey:
     push {lr}
     bl getchar
-
-    @cmp r0, #-1
-    @bne noKey
  
     mov r10, r0
     @ldr r1, =inputChar
     @ldrb r10, [r1]
-
-    pop {lr}
-    bx lr
-
-noKey:
-    @push {lr}
-
-    mov r10, #0
-
-    ldr r0, =stdin
-    ldr r0, [r0]
-    bl clearerr
 
     pop {lr}
     bx lr
