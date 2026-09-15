@@ -2,21 +2,7 @@
 
 @ formatted string output for clock output
 formatString:
-        .asciz "%02d:%02d:%02d\r"
-
-@ formatting key input as string
-inputFormat:
-    .asciz "%c"
-
-@ Holds the keyboard input
-inputChar:
-    .byte 0
-
-@ Creating state variables
-.equ STATE_CLEAR, 0
-.equ STATE_RUN, 1
-.equ STATE_LAP, 2
-.equ STATE_STOP, 3
+        .asciz "%02d:%02d:%02d\n"
 
 @ prog loop counter for nanoseconds
 timingLoop:
@@ -30,9 +16,7 @@ main:
     mov r9, #0    @ minutes
     mov r8, #0    @ seconds
     mov r7, #0    @ hundredths of a second
-   
-    @Start in CLEAR
-    b clearState
+
 @ prints out the clock values using printf. printf uses 4 arguments, r0-3, for print
 printClock:
     ldr r0, =formatString   @first arg is formatted string
@@ -40,11 +24,6 @@ printClock:
     mov r2, r8    @third arg is value of seconds
     mov r3, r7    @fourth arg is value of hundredthsSec
     bl printf   @ branches out to print
-
-    @flushes print output buffer
-    ldr r0, =stdout   @points r0 to location of output buffer
-    ldr r0, [r0]    @ r0 is set to contents of the buffer
-    bl fflush    @buffer is cleared
 
 @ initiates program nanosecond counter loop with default value in var timingLoop and prints time
 initNanoCount:
