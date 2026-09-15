@@ -25,6 +25,11 @@ printClock:
     mov r3, r7    @fourth arg is value of hundredthsSec
     bl printf   @ branches out to print
 
+@flushes print output buffer
+    ldr r0, =stdout   @points r0 to location of output buffer
+    ldr r0, [r0]    @ r0 is set to contents of the buffer
+    bl fflush    @buffer is cleared
+
 @ initiates program nanosecond counter loop with default value in var timingLoop and prints time
 initNanoCount:
     ldr r6, =timingLoop @ loads r6 with the address of timingLoop
