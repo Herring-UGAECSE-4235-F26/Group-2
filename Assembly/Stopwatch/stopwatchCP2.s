@@ -5,7 +5,7 @@ disableEcho:
 	.asciz "stty -echo"
 @ formatted string output for clock output
 formatString:
-        .asciz "%02d:%02d:%02d\r"
+        .asciz "\t%02d:%02d:%02d\r"
 
 @ formatting key input as string
 inputFormat:
