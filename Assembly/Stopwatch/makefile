@@ -1,4 +1,4 @@
-OBJS = stopwatchCP2.o E4235_KYBdeblock.o
+OBJS = stopwatchCP1.o
 
 ifdef DEBUG
 DEBUGFLGS = -g
@@ -9,8 +9,8 @@ endif
 %.o : %.s
 	as $(DEBUGFLGS) $< -o $@
 main: $(OBJS)
-	gcc -o stopwatchCP2 $(OBJS) $(DEPS)
+	gcc -o stopwatchCP1 $(OBJS) $(DEPS)
 run: main
-	./stopwatchCP2
+	./stopwatchCP1
 clean:
-	rm *.o stopwatchCP2
+	rm *.o stopwatchCP1
