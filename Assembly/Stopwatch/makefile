@@ -1,4 +1,4 @@
-OBJS = stopwatchCP2.o E4235_KYdeblock.o
+OBJS = stopwatchCP2.o E4235_KYBdeblock.o
 
 ifdef DEBUG
 DEBUGFLGS = -g
