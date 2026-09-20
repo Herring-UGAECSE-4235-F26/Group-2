@@ -2,7 +2,7 @@
 
 @ formatted string output for clock output
 formatString:
-        .asciz "%02d:%02d:%02d\r"
+        .asciz "     %02d:%02d:%02d\r"
 
 @ prog loop counter for nanoseconds
 timingLoop:

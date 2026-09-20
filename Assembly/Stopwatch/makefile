@@ -7,7 +7,7 @@ DEBUGFLGS =
 endif
 
 %.o : %.s
-	as $(DEBUGFLGS) $< -o $@
+	as $(DEBUGFLGS) $^ -o $@
 main: $(OBJS)
 	gcc -o stopwatchCP2 $(OBJS) $(DEPS)
 run: main
