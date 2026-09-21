@@ -23,7 +23,7 @@ void setRTC() {
 	int hour;
 	if(t->tm_hour == 0) {
 		hour = 12;
-	} else if (t->tm_hour >12) {
+	} else if (t->tm_hour > 12) {
 		hour = tm_hour - 12;
 	} else {
 		hour = t->tm_hour;
