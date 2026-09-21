@@ -1,15 +1,16 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "I2CDriver.h"
 #include <E4235.h>
 
 // GPIO pin definitions
-int SDA_PIN = 2; // GPIO pin for SDA
-int SCL_PIN = 3; // GPIO pin for SCL
+int SDA_PIN = 17; // GPIO pin for SDA
+int SCL_PIN = 27; // GPIO pin for SCL
 int i2c_clk_delay = 100; // Delay for clock speed control in microseconds
 int i2c_clk_half_delay = 50; // Half of the clock delay for timing
 
-int SLAVE_ADDRESS = 0x50; // I2C slave address
+int SLAVE_ADDRESS = 0x68; // I2C slave address
 
 char read_byte_buff[8] = {0}; // Buffer to hold data read from I2C device
 char write_byte_buff[8] = {0}; // Buffer to hold data to write to I2C device
@@ -18,12 +19,12 @@ char write_byte_buff[8] = {0}; // Buffer to hold data to write to I2C device
 //////////////////////////////////////////////*GPIO pin control functions for active low/open drain operation.*/
 
 // Set the specified GPIO pin "high". Done by floating the pin
-void gpio_release(uint8_t pin) { E4235_GPIO_Select(pin, 0); } //pin output disconnected by setting as input
+void gpio_release(uint8_t pin) { E4235_Select(pin, 0); } //pin output disconnected by setting as input
 
 // Drive pin as "low" by writing a 0 to the pin
 void gpio_drive_low(uint8_t pin) {
-    E4235_GPIO_Select(pin, 1); // Set pin as output
-    E4235_GPIO_WRITE(pin, 0); //write 0 to pin
+    E4235_Select(pin, 1); // Set pin as output
+    E4235_Write(pin, 0); //write 0 to pin
 }
 
 //////////////////////////////////////////////*I2C SDA and SCL pin high/low drive functions. */
@@ -37,6 +38,7 @@ void scl_low() { gpio_drive_low(SCL_PIN); } // Drive SCL line low
 
 // Initiates the gpio pins for i2c by setting them to high. i2c pins are active low.
 void i2c_init_pins() {
+    E4235_Init();
     sda_high();
     scl_high();
 }
@@ -51,7 +53,7 @@ void i2c_start_message() {
     sda_high(); // Ensure SDA is high
     scl_high(); // Ensure SCL is high
     sda_low();
-    E4235_Delay_us(i2c_clk_half_delay); // Delay for half clock period
+    E4235_Delaymicro(i2c_clk_half_delay); // Delay for half clock period
     scl_low();
 }
 
@@ -59,23 +61,58 @@ void i2c_start_message() {
 void i2c_stop_message() {
     sda_low(); // Ensure SDA is low
     scl_high();
-    E4235_Delay_us(i2c_clk_half_delay); // Delay for half clock period
+    E4235_Delaymicro(i2c_clk_half_delay); // Delay for half clock period
     sda_high();
 }
 
-void i2c_write_byte(write_byte_buff) {
-    for (int i = 0; i < 8; i++) {
-        if ((write_byte_buff & (1 << (7 - i))) != 0) {
+// Function to write a byte to the I2C bus
+void i2c_write_byte(uint8_t data) {
+    int ack_bit;
+    for (int i = 0; i < 8; i++) {   // Loop through each bit
+        if ((data & (1 << (7 - i))) != 0) {
             sda_high();
         } else {
             sda_low();
         }
         scl_high(); // Clock high
-        E4235_Delay_us(i2c_clk_delay); // Delay for half clock period
+        E4235_Delay_micro(i2c_clk_delay); // Delay for half clock period
         scl_low();  // Clock low
     }
     // After sending the byte, release SDA for ACK/NACK
     sda_high();
     scl_high(); // Clock high for ACK/NACK
+    E4235_Delaymicro(i2c_clk_half_delay);
+    ack_bit = E4235_Read(SDA_PIN);  // Read ACK/NACK bit
     scl_low();  // Clock low
+
+    return ack_bit;
 }
+
+uint8_t i2c_read_byte(int ack) {
+    uint8_t data = 0;
+    sda_high(); // Release SDA for reading
+    for (int i = 0; i < 8; i++) {   // Loop through each bit
+        E4235_Delaymicro(i2c_clk_half_delay);
+        scl_high(); // Clock high
+        E4235_Delaymicro(i2c_clk_half_delay); // Delay for half clock period
+        data <<= 1; // Shift left to make room for next bit
+        if (E4235_Read(SDA_PIN)) {
+            data |= 1; // Set LSB if SDA is high
+        }
+        scl_low();  // Clock low
+    }
+    
+    if(ack){
+        sda_low(); // Drive SDA low for ACK
+    } else {
+        sda_high(); // Release SDA for NACK
+    }
+    E4235_Delaymicro(i2c_clk_half_delay);
+    scl_high();  // Clock high
+    E4235_Delaymicro(i2c_clk_half_delay);
+    scl_low();  // Clock low
+    sda_high(); // Release SDA
+    return data;
+}
+
+
