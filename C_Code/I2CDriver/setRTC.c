@@ -3,6 +3,8 @@
 #include "I2CDriver.h"
 #include <time.h>
 
+#define RTC_ADDR 0x68
+
 uint8_t dec_to_bcd(int val) {
 	return ((val / 10) << 4) | (val % 10);
 }
@@ -11,7 +13,7 @@ int bcd_to_dec(uint8_t val) {
 	return ((val >> 4) * 10) + (val & 0x0F);
 }
 
-void setRTC() {
+void rtc_set_time() {
 	//Returns the Pi's current time
 	time_t now = time(NULL);
 	struct tm *t = localtime(&now);
@@ -24,7 +26,7 @@ void setRTC() {
 	if(t->tm_hour == 0) {
 		hour = 12;
 	} else if (t->tm_hour > 12) {
-		hour = tm_hour - 12;
+		hour = t->tm_hour - 12;
 	} else {
 		hour = t->tm_hour;
 	}
@@ -47,7 +49,7 @@ void setRTC() {
     
     // Send the Slave Address with the Write bit (0)
     // 0x68 shifted left by 1 is 0xD0
-    i2c_write_byte(SLAVE_ADDRESS << 1);
+    i2c_write_byte(RTC_ADDR << 1);
     
     // Send the starting register address (0x00)
     i2c_write_byte(0x00);
