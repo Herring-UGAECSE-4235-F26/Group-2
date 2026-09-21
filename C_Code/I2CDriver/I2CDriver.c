@@ -66,7 +66,7 @@ void i2c_stop_message() {
 }
 
 // Function to write a byte to the I2C bus
-void i2c_write_byte(uint8_t data) {
+int i2c_write_byte(uint8_t data) {
     int ack_bit;
     for (int i = 0; i < 8; i++) {   // Loop through each bit
         if ((data & (1 << (7 - i))) != 0) {
@@ -75,7 +75,7 @@ void i2c_write_byte(uint8_t data) {
             sda_low();
         }
         scl_high(); // Clock high
-        E4235_Delay_micro(i2c_clk_delay); // Delay for half clock period
+        E4235_Delaymicro(i2c_clk_delay); // Delay for half clock period
         scl_low();  // Clock low
     }
     // After sending the byte, release SDA for ACK/NACK
