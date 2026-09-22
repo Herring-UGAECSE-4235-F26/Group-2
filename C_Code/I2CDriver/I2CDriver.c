@@ -7,8 +7,8 @@
 // GPIO pin definitions
 int SDA_PIN = 17; // GPIO pin for SDA
 int SCL_PIN = 27; // GPIO pin for SCL
-int i2c_clk_delay = 1000; // Delay for clock speed control in microseconds
-int i2c_clk_half_delay = 500; // Half of the clock delay for timing
+int i2c_clk_delay = 10; // Delay for clock speed control in microseconds
+int i2c_clk_half_delay = 5; // Half of the clock delay for timing
 
 int SLAVE_ADDRESS = 0x68; // I2C slave address
 
