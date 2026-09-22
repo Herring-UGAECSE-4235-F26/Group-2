@@ -1,5 +1,5 @@
 CC=gcc
-DEP=I2CDriver.h
+DEP=I2CDriver.c
 FLAG=-lE4235
 
 OBJ=setRTC.c
