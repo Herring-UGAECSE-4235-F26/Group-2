@@ -19,8 +19,10 @@
 
 	.text
 	.global _start
-_start:	 adr	r2, lookup		@ point to lookup 
-	 ldrb	r10, [r2, r9]	@ r10 = entry of lookup table index by r9
+_start:	
+	mov r9, #3			@set x = 3 
+	adr	r2, lookup		@ point to lookup 
+	ldrb	r10, [r2, r9]	@ r10 = entry of lookup table index by r9
 	mov	r7,#1
 	svc	0
 
