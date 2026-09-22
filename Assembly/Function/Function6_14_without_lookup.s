@@ -3,7 +3,7 @@
 
 @Calculates mathematically x^2 + 2x + 3
 _start:
-	mov r9, #3
+	mov r9, #3			@Sets x = 3
 
 	mul r10, r9, r9 	@r10 = x^2
 
