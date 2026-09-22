@@ -43,11 +43,6 @@ void i2c_init_pins() {
     scl_high();
 }
 
-// Determines clock speed for i2c coms using user input.
-void i2c_set_clk_speed(uint32_t speed) {
-    
-}
-
 // Function to start i2c transmission. i2c start condition:SDA pulled low before SCL 
 void i2c_start_message() {
     sda_high(); // Ensure SDA is high
@@ -115,4 +110,32 @@ uint8_t i2c_read_byte(int ack) {
     return data;
 }
 
+// Writes a 7-byte buffer to register 0x00 on the RTC
+void i2c_write_buffer(uint8_t dev_addr, uint8_t *data) {
+    i2c_start_message();
+    i2c_write_byte(dev_addr << 1);  // Send Device Address + Write bit (0)
+    i2c_write_byte(0x00);   // Send the starting register address
+    for (int i = 0; i < 7; i++) {   // Write exactly 7 bytes
+        i2c_write_byte(data[i]);
+    }
+    i2c_stop_message();
+}
 
+// Reads 7 bytes from register 0x00 on the RTC into a buffer
+void i2c_read_buffer(uint8_t dev_addr, uint8_t *buffer) {
+    // Write internal register pointer to 0x00
+    i2c_start_message();
+    i2c_write_byte(dev_addr << 1); // Device Address + Write bit (0)
+    i2c_write_byte(0x00);
+    
+    // Repeated start to switch bus direction to read
+    i2c_start_message();
+    i2c_write_byte((dev_addr << 1) | 1); // Device Address + Read bit (1)
+    for (int i = 0; i < 7; i++) {
+        // Send ACK (1) for first 6 bytes, NACK (0) for the 7th byte
+        int send_ack = (i < 6) ? 1 : 0;
+        buffer[i] = i2c_read_byte(send_ack);
+    }
+    
+    i2c_stop_message();
+}
