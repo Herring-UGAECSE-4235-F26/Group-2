@@ -3,5 +3,58 @@
     exponentXInput: .asciz "Calculate x^n. Enter x: "
     exponentNInput: .asciz "Enter n: "
     exponentOutput: .asciz "%d^%d= %d\n"
+    float_format: .asciz "%f"
+    int_format:     .asciz "%d"
 
+
+.align 2
+x: .float 0.0
+n: .word 0
+
+.text
+.global main
 main:
+    push {r4, lr} @save return address
+
+    @read x
+    ldr r0, =exponentXInput
+    bl printf
+
+    ldr r0, =float_format
+    ldr r1, =exponentXInput
+    bl scanf
+    cmp r0, #1
+
+
+    @ Read n 
+    ldr r0, =exponentNInput
+    bl printf
+
+    ldr r0, =int_format
+    ldr r1, =n 
+    bl scanf
+    rmp r0, #1
+
+
+    ldr r1, =exponentXInput
+    vldr s0, [r1]   @s0 = x
+    ldr r1, =n
+    ldr r0, [r1]    @r0 = n 
+    cmp r0, #0
+
+    vmov.f32 s1, #1.0   @result = 1
+
+exponent_loop:
+    cmp r0, #0
+    beq done
+    vmul.f32 s1, s1, s0 @result*x
+    sub r0, r0, #1      @decreasing count
+    b exponent_loop
+
+done:
+    vcvt.f64.f32 d0, s1
+    vmov r2, r3, d0
+    ldr r0, =exponentOutput
+    bl printf
+    mov r0, #0
+    pop {r4, pc}
