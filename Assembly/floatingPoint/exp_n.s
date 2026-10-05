@@ -2,7 +2,7 @@
     
     exponentXInput: .asciz "Calculate x^n. Enter x: "
     exponentNInput: .asciz "Enter n: "
-    exponentOutput: .asciz "%d^%d= %d\n"
+    exponentOutput: .asciz "%f^%d= %f\n"
     float_format: .asciz "%f"
     int_format:     .asciz "%d"
 
@@ -21,7 +21,7 @@ main:
     bl printf
 
     ldr r0, =float_format
-    ldr r1, =exponentXInput
+    ldr r1, =x
     bl scanf
     cmp r0, #1
 
@@ -33,10 +33,10 @@ main:
     ldr r0, =int_format
     ldr r1, =n 
     bl scanf
-    rmp r0, #1
+    cmp r0, #1
 
 
-    ldr r1, =exponentXInput
+    ldr r1, =x
     vldr s0, [r1]   @s0 = x
     ldr r1, =n
     ldr r0, [r1]    @r0 = n 
@@ -52,9 +52,16 @@ exponent_loop:
     b exponent_loop
 
 done:
-    vcvt.f64.f32 d0, s1
+    vcvt.f64.f32 d0, s0
+    vcvt.f64.f32 d1, s1
+    vpush {d1}
+    ldr r2, =n
+    ldr r2, [r2]
+    mov r3, #0
+    push {r2, r3}
     vmov r2, r3, d0
     ldr r0, =exponentOutput
     bl printf
+    add sp, sp, #16
     mov r0, #0
     pop {r4, pc}
