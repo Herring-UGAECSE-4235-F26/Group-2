@@ -103,3 +103,4 @@ sin_v_f:@@ set runfast mode and rounding to nearest
     vadd.f32 s26,s26,s28
     vadd.f32 s0,s0,s26
     mov pc,lr		@can also use bx lr
+    
