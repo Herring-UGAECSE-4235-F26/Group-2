@@ -6,6 +6,8 @@
     float_format: .asciz "%f"
     int_format:     .asciz "%d"
 
+    one: .float 1.0
+
 
 .align 2
 x: .float 0.0
@@ -42,7 +44,9 @@ main:
     ldr r0, [r1]    @r0 = n 
     cmp r0, #0
 
-    vmov.f32 s1, #1.0   @result = 1
+    ldr r1, =one
+    vldr s2, [r1]
+    vmov.f32 s1, s2
 
 exponent_loop:
     cmp r0, #0
