@@ -4,6 +4,7 @@
     factorialOutput: .asciz "%d! = %f\n"
     input_format: .asciz "%d"
 
+    .align 2
     one: .float 1.0
 
 .align 2
