@@ -26,7 +26,7 @@ ctab: .word 0xBE2AAAAB @ -1.666667e-01
 .word 0xB9500D01 @ -1.984127e-04
 .word 0x3638EF1D @ 2.755732e-06
 .word 0xB2D7322B @ -2.505211e-08
-
+.text
 .global main
 main:
     push {r4, lr}
@@ -63,6 +63,7 @@ main:
 
 bad_input:
     ldr r0, =error
+    bl printf
 
 finish:
     add sp, sp, #8
