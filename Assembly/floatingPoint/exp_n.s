@@ -56,8 +56,8 @@ exponent_loop:
     b exponent_loop
 
 done:
-    vcvt.f64.f32 d0, s0
     vcvt.f64.f32 d1, s1
+    vcvt.f64.f32 d0, s0
     vpush {d1}
     ldr r2, =n
     ldr r2, [r2]
