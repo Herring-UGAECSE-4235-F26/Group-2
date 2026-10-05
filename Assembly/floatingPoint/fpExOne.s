@@ -25,6 +25,8 @@ main:
 	vmul.f32	s0, s0, s2	@s0=s0*pi
 	bl printOutput
 @area 2
+	ldr r2, =piNumber
+	vldr s2, [r2]		@load r2 into s2
 	ldr r1,=radius_2	@r1=5.125
 	vldr.f32	s1, [r1]	@load r1 into s1
 	vmul.f32 	s0, s1, s1	@s0=s1*s1
