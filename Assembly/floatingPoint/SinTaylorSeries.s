@@ -57,6 +57,7 @@ main:
     vcvt.f64.f32 d0, s0
     vmov r2, r3, d0 @degrees are printf's first number
     ldr r0, =output
+    bl printf	@print degrees and the calculated sine
 
     mov r0, #0
     b finish
