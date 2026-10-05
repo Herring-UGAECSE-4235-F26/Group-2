@@ -1,8 +1,10 @@
     .data
 
     factorialInput: .asciz "Calculate n!. Enter n: "
-    factorialOutput: .asciz "n!= %d\n"
+    factorialOutput: .asciz "%d! = %f\n"
     input_format: .asciz "%d"
+
+    one: .float 1.0
 
 .align 2
 n: .word 0
@@ -18,21 +20,28 @@ main:
     ldr r0, =input_format
     ldr r1, =n
     bl scanf
-    cmp r0, #1
-
-    mov r1, r4  @counter
-    mov r2, #1  @r2 = result, initially 1
+    ldr r1, =n
+    ldr r1, [r1]
+    vmov s0, r1
+    vcvt.f32.s32 s0, s0
+    ldr r1, =one
+    vldr s2, [r1]
+    vmov s1, s2
 
 factorial_loop:
-    cmp r1, #1
+    vcmp.f32 s0, s2
+    vmrs APSR_nzcv, FPSCR
     ble done
-    mul r2, r1, r2  @result = counter * result
-    sub r1, r1, #1 @decrementing counter
+    vmul.f32 s1, s1, s0
+    vsub.f32 s0, s0, s2
     b factorial_loop
 
 done:
+    vcvt.f64.f32 d0, s1
+    vmov r2, r3, d0
+    ldr r1, =n
+    ldr r1, [r1]
     ldr r0, =factorialOutput
-    mov r1, r4
     bl printf
     mov r0, #0
     pop {r4, pc}
