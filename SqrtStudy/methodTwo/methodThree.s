@@ -1,3 +1,5 @@
+.text
+.global fixed_point_sqrt
 @initializing result and remainder to 0
 fixed_point_sqrt:
     mov r1, #0  @result = 0
