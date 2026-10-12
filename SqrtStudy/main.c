@@ -16,7 +16,7 @@ volatile double result_sink; // Prevent compiler from removing calculations
 
 //Converting a decimal into Q32.32 fixed point
 uint64_t decimal_to_q32(double input) {
-    return (uint64_t)(input * Q32_SCALE);
+    return (uint64_t)(input * Q32_SCALE + 0.5);
 }
 
 //Converting into Q16.16 fixed point into decimal
@@ -54,6 +54,10 @@ void test_sqrt(double number) {
     }
     end = clock();
     time2 = ((double)(end - start) / CLOCKS_PER_SEC) * 1000000000.0 / REPEAT; // Convert to nanoseconds
+
+    printf("Q32 Input: %llu\n", (unsigned long long)q32_input);
+    printf("Upper 32 bits: %u\n", (unsigned int)(q32_input >> 32));
+    printf("Lower 32 buts: %u\n", (unsigned int)(q32_input & 0xFFFFFFFFULL));
     //Method 3
     start = clock();
     for (int i = 0; i < REPEAT; i++) {

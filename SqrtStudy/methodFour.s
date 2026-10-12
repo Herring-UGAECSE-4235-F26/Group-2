@@ -15,14 +15,17 @@ quake_sqrt:
     vmov s0, r0
 
     @Calculate half of original output
-    vmov.f32 s2, #0.5
+    ldr r2, =half
+    vldr s2, [r2]
+
     vmul.f32 s2, s1, s2
 
     @y = y*(1.5 -.5 * x * y * y)
     vmul.f32 s3, s0, s0
     vmul.f32 s3, s2, s3
 
-    vmov.f32 s4, #1.5
+    ldr r2, =oneHalf
+    vldr s4, [r2]
     vsub.f32 s3, s4, s3
 
     vmul.f32 s0,s0, s3
@@ -31,3 +34,7 @@ quake_sqrt:
     vmul.f32 s0, s1, s0
 
     bx lr
+
+.align 2
+half: .float 0.5
+oneHalf: .float 1.5
