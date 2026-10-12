@@ -7,8 +7,11 @@
 #define Q32_SCALE 4294967296.0
 #define Q16_SCALE 65536.0
 
+extern float sqrtWithC(float input);
+extern float sqrtWithASM(float input);
 extern uint32_t fixed_point_sqrt(uint64_t input);
 extern float quake_sqrt(float input);
+
 volatile double result_sink; // Prevent compiler from removing calculations
 
 //Converting a decimal into Q32.32 fixed point
@@ -35,11 +38,22 @@ void test_sqrt(double number) {
     uint32_t fixed_result = 0;
 
     //###############Method 1##################
+    start = clock();
+    for (int i = 0; i < REPEAT; i++) {
+        result1 = sqrtWithC((float)number);
+        result_sink = result1;
+    }
+    end = clock();
+    time1 = ((double)(end - start) / CLOCKS_PER_SEC) * 1000000000.0 / REPEAT; // Convert to nanoseconds
 
     //###############Method 2##################
-
-
-    
+    start = clock();
+    for (int i = 0; i < REPEAT; i++) {
+        result2 = sqrtWithASM((float)number);
+        result_sink = result2;
+    }
+    end = clock();
+    time2 = ((double)(end - start) / CLOCKS_PER_SEC) * 1000000000.0 / REPEAT; // Convert to nanoseconds
     //Method 3
     start = clock();
     for (int i = 0; i < REPEAT; i++) {
@@ -106,7 +120,7 @@ int main(void) {
         printf("between 500000 and 1000000 with decimal");
         test_sqrt(c);
 
-        printf("Do you want to test another number? (y/n): ");
+        printf("Do you want to test other numbers? (y/n): ");
         if (scanf(" %c", &again) != 1) {
             return 1; // Exit if input is not a valid character
         }
