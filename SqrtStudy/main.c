@@ -37,7 +37,7 @@ void test_sqrt(double number) {
     float quake_input = (float)number;
     uint32_t fixed_result = 0;
 
-    //###############Method 1##################
+    //Method 1
     start = clock();
     for (int i = 0; i < REPEAT; i++) {
         result1 = sqrtWithC((float)number);
@@ -46,7 +46,7 @@ void test_sqrt(double number) {
     end = clock();
     time1 = ((double)(end - start) / CLOCKS_PER_SEC) * 1000000000.0 / REPEAT; // Convert to nanoseconds
 
-    //###############Method 2##################
+    //Method 2
     start = clock();
     for (int i = 0; i < REPEAT; i++) {
         result2 = sqrtWithASM((float)number);
