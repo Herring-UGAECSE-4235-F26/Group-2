@@ -1,6 +1,7 @@
 CC = gcc
 TARGET = sqrtStudy
 OBJS = main.o methodOne.o methodTwo.o methodThree.o methodFour.o
+LIBS = -lm
 
 all: $(TARGET)
 
