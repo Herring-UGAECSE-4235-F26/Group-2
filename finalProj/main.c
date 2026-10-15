@@ -30,6 +30,15 @@ void handle_sigint(int sig) {
 void test_motor_gpio(void) {
     int pins[4] = {17, 27, 22, 23};
     int driver_pins[4] = {2, 7, 10, 15};
+    char input[10];
+
+    printf("\nDo you want to run the motor GPIO test? (y/n): ");
+    if (fgets(input, sizeof(input), stdin) != NULL) {
+        if (input[0] != 'y' && input[0] != 'Y') {
+            printf("Skipping motor GPIO test.\n\n");
+            return;
+        }
+    }
 
     printf("\nStarting motor GPIO test...\n");
 
@@ -54,9 +63,14 @@ void test_motor_gpio(void) {
         printf("\nGPIO%d is HIGH.\n", pins[i]);
         printf("Measure SN754410NE pin %d.\n", driver_pins[i]);
         printf("Expected voltage: approximately 3.3 V\n");
-        printf("Press Enter when finished measuring...\n");
+        printf("Press Enter to continue, or 'q' then Enter to quit test...\n");
 
-        getchar();
+        if (fgets(input, sizeof(input), stdin) != NULL) {
+            if (input[0] == 'q' || input[0] == 'Q') {
+                printf("Aborting motor GPIO test.\n");
+                break;
+            }
+        }
     }
 
     // Return all GPIOs LOW after testing
@@ -64,7 +78,7 @@ void test_motor_gpio(void) {
         E4235_Write(pins[i], 0); //[cite: 46, 57]
     }
 
-    printf("\nAll GPIO tests completed.\n");
+    printf("\nMotor GPIO test sequence finished.\n\n");
 }
 
 int main() {
