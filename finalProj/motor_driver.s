@@ -106,15 +106,15 @@ step_timing_loop:
     mov r4, r0             @ Save target delay in ticks
     
     @ Read the 64-bit CNTPCT (Physical Count) into r5(lower) and r6(upper)
-    mrrc p15, 0, r5, r6, c14 
+    mrrc p15, 1, r5, r6, c14 
 
 wait_loop:
-    @ Read the 64-bit CNTPCT into r2(lower) and r3(upper)
-    mrrc p15, 0, r2, r3, c14 
+    @ Read the 64-bit CNTPCT into r1(lower) and r2(upper)
+    mrrc p15, 1, r1, r2, c14 
     
     @ Calculate elapsed time (Current Lower - Start Lower)
-    sub r2, r2, r5
-    
+    sub r1, r1, r5
+
     @ Compare elapsed time against target delay
     cmp r2, r4
     
