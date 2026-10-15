@@ -9,11 +9,11 @@ extern void step_routine(int direction, int mode, int* pins);
 extern void step_timing_loop(unsigned int ticks);
 
 // Define GPIO pins (Adjust these to match your actual wiring)
-#define PIN_ENABLE 17
-#define PIN_A 18
-#define PIN_B 19
-#define PIN_C 20
-#define PIN_D 21
+#define PIN_ENABLE 24
+#define PIN_A 17
+#define PIN_B 27
+#define PIN_C 22
+#define PIN_D 23
 
 // RP4 ARM Generic Timer frequency (typically 54 MHz)
 #define TIMER_FREQ 54000000
