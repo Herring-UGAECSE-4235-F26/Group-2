@@ -18,6 +18,45 @@ extern void step_timing_loop(unsigned int ticks);
 // RP4 ARM Generic Timer frequency (typically 54 MHz)
 #define TIMER_FREQ 54000000
 
+void test_motor_gpio(void) {
+    int pins[4] = {17, 27, 22, 23};
+    int driver_pins[4] = {2, 7, 10, 15};
+
+    printf("\nStarting motor GPIO test...\n");
+
+    // Keep the H-bridge disabled during testing
+    E4235_Write(PIN_ENABLE, 0);
+
+    // Initialize all motor GPIOs LOW
+    for (int i = 0; i < 4; i++) {
+        E4235_Write(pins[i], 0);
+    }
+
+    for (int i = 0; i < 4; i++) {
+
+        // Set all motor GPIOs LOW
+        for (int j = 0; j < 4; j++) {
+            E4235_Write(pins[j], 0);
+        }
+
+        // Set the GPIO being tested HIGH
+        E4235_Write(pins[i], 1);
+
+        printf("\nGPIO%d is HIGH.\n", pins[i]);
+        printf("Measure SN754410NE pin %d.\n", driver_pins[i]);
+        printf("Expected voltage: approximately 3.3 V\n");
+        printf("Press Enter when finished measuring...\n");
+
+        getchar();
+    }
+
+    // Return all GPIOs LOW after testing
+    for (int i = 0; i < 4; i++) {
+        E4235_Write(pins[i], 0);
+    }
+
+    printf("\nAll GPIO tests completed.\n");
+}
 int main() {
     // 1. Initialize Hardware and GPIO
     if (E4235_Init() != 0) { //[cite: 46, 56]
@@ -44,6 +83,7 @@ int main() {
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)");
     printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [Q]uit\n");
 
+    test_motor_gpio();
     // 3. Unblock standard input for non-blocking keyboard polling
     E4235_KYBdeblock(1); //[cite: 46, 52, 53]
 
