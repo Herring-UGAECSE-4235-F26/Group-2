@@ -22,31 +22,25 @@ half_step_table:
 
 @ -------------------------------------------------------------------------
 @ enable_routine
-@ Turns the H-bridge on or off through the 4N25 optocoupler[cite: 5, 8].
-@ Args:
-@   r0: Enable pin number
-@   r1: State (1 = Enable, 0 = Disable)
+@ Turns the H-bridge on or off through the 4N25 optocoupler.
 @ -------------------------------------------------------------------------
 enable_routine:
+    @ Push an even number of registers (r4, lr) to maintain 8-byte AAPCS stack alignment[cite: 9]
     push {r4, lr}
-    @ AAPCS: r0 (GPIO) and r1 (state) are passed directly to the library[cite: 46, 51]
     bl E4235_Write
     pop {r4, pc}
 
 @ -------------------------------------------------------------------------
 @ step_routine
 @ Looks up the next coil pattern and drives the SN754410NE inputs.
-@ Args:
-@   r0: Direction (1 = CW, 0 = CCW)
-@   r1: Mode (1 = Half step, 0 = Full step)
-@   r2: Pointer to integer array containing the 4 motor pins {A, B, C, D}
 @ -------------------------------------------------------------------------
 step_routine:
+    @ Push 6 registers (24 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
     push {r4-r8, lr}
     
     mov r4, r0             @ Save direction
     mov r5, r1             @ Save mode
-    mov r6, r2             @ Save pin array pointer pointer
+    mov r6, r2             @ Save pin array pointer
     
     @ Load current step index
     ldr r7, =current_step
@@ -78,47 +72,54 @@ fetch_pattern:
     ldrb r4, [r4, r8]      @ r4 now holds the 4-bit pattern
     
     @ Drive Pin A (Bit 3)
-    ldr r0, [r6, #0]       @ Load Pin A number from array into r0[cite: 46, 51]
+    ldr r0, [r6, #0]       
     and r1, r4, #0b1000
-    lsr r1, r1, #3         @ Shift bit down to 0 or 1 for state in r1[cite: 46, 51]
-    bl E4235_Write	@[cite: 46, 57]
+    lsr r1, r1, #3         
+    bl E4235_Write
 
     @ Drive Pin B (Bit 2)
     ldr r0, [r6, #4]       
     and r1, r4, #0b0100
     lsr r1, r1, #2
-    bl E4235_Write	@[cite: 46, 57]
+    bl E4235_Write
 
     @ Drive Pin C (Bit 1)
     ldr r0, [r6, #8]       
     and r1, r4, #0b0010
     lsr r1, r1, #1
-    bl E4235_Write	@[cite: 46, 57]
+    bl E4235_Write
 
     @ Drive Pin D (Bit 0)
     ldr r0, [r6, #12]      
     and r1, r4, #0b0001
-    bl E4235_Write	@[cite: 46, 57]
+    bl E4235_Write
 
     pop {r4-r8, pc}
 
 @ -------------------------------------------------------------------------
 @ step_timing_loop
-@ Waits until the next step is due using the ARM generic timer[cite: 8, 9].
-@ Args:
-@   r0: Target wait interval in timer ticks
+@ Waits until the next step is due using the ARM generic timer[cite: 9].
 @ -------------------------------------------------------------------------
 step_timing_loop:
-    push {r4, lr}
-    mov r4, r0             @ Save target interval
+    @ Push 4 registers (16 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
+    push {r4, r5, r6, lr}
+    mov r4, r0             @ Save target delay in ticks
     
-    @ Read current 32-bit timer value (CNTPCT lower half) into r1
-    mrc p15, 0, r1, c14, c0, 0
-    add r4, r1, r4         @ Calculate target end time
+    @ Read the START time (CNTPCT lower half) into r5
+    mrc p15, 0, r5, c14, c0, 0
 
 wait_loop:
+    @ Read the CURRENT time into r1
     mrc p15, 0, r1, c14, c0, 0
+    
+    @ Calculate elapsed time (Current - Start)
+    sub r1, r1, r5
+    
+    @ Compare elapsed time against target delay
     cmp r1, r4
-    blt wait_loop          @ Keep looping until current time >= end time
+    
+    @ blo (Branch if Lower) performs an UNSIGNED comparison, 
+    @ completely immune to the signed wrap-around bug!
+    blo wait_loop
 
-    pop {r4, pc}
+    pop {r4, r5, r6, pc}
