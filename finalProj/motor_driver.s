@@ -28,10 +28,10 @@ half_step_table:
 @   r1: State (1 = Enable, 0 = Disable)
 @ -------------------------------------------------------------------------
 enable_routine:
-    push {lr}
+    push {r4, lr}
     @ AAPCS: r0 (GPIO) and r1 (state) are passed directly to the library[cite: 46, 51]
     bl E4235_Write
-    pop {pc}
+    pop {r4, pc}
 
 @ -------------------------------------------------------------------------
 @ step_routine
@@ -81,24 +81,24 @@ fetch_pattern:
     ldr r0, [r6, #0]       @ Load Pin A number from array into r0[cite: 46, 51]
     and r1, r4, #0b1000
     lsr r1, r1, #3         @ Shift bit down to 0 or 1 for state in r1[cite: 46, 51]
-    bl E4235_Write[cite: 46, 57]
+    bl E4235_Write	@[cite: 46, 57]
 
     @ Drive Pin B (Bit 2)
     ldr r0, [r6, #4]       
     and r1, r4, #0b0100
     lsr r1, r1, #2
-    bl E4235_Write[cite: 46, 57]
+    bl E4235_Write	@[cite: 46, 57]
 
     @ Drive Pin C (Bit 1)
     ldr r0, [r6, #8]       
     and r1, r4, #0b0010
     lsr r1, r1, #1
-    bl E4235_Write[cite: 46, 57]
+    bl E4235_Write	@[cite: 46, 57]
 
     @ Drive Pin D (Bit 0)
     ldr r0, [r6, #12]      
     and r1, r4, #0b0001
-    bl E4235_Write[cite: 46, 57]
+    bl E4235_Write	@[cite: 46, 57]
 
     pop {r4-r8, pc}
 
