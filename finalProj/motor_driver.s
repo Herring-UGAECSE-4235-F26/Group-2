@@ -105,12 +105,12 @@ step_timing_loop:
     push {r4, r5, r6, lr}
     mov r4, r0             @ Save target delay in ticks
     
-    @ Read the START time (CNTPCT lower half) into r5
-    mrc p15, 0, r5, c14, c0, 0
+    @ Read CNTPCT: START time lower half in r5, upper half in r6
+    mrrc p15, 0, r5, r6, c14
 
 wait_loop:
-    @ Read the CURRENT time into r1
-    mrc p15, 0, r1, c14, c0, 0
+    @ Read CNTPCT: CURRENT time lower half in r1, upper half in r2
+    mrrc p15, 0, r1, r2, c14
     
     @ Calculate elapsed time (Current - Start)
     sub r1, r1, r5
