@@ -34,22 +34,22 @@ void test_motor_gpio(void) {
     printf("\nStarting motor GPIO test...\n");
 
     // Keep the H-bridge disabled during testing
-    E4235_Write(PIN_ENABLE, 0);[cite: 46, 57]
+    E4235_Write(PIN_ENABLE, 0); //[cite: 46, 57]
 
     // Initialize all motor GPIOs LOW
     for (int i = 0; i < 4; i++) {
-        E4235_Write(pins[i], 0);[cite: 46, 57]
+        E4235_Write(pins[i], 0); //[cite: 46, 57]
     }
 
     for (int i = 0; i < 4; i++) {
 
         // Set all motor GPIOs LOW
         for (int j = 0; j < 4; j++) {
-            E4235_Write(pins[j], 0);[cite: 46, 57]
+            E4235_Write(pins[j], 0); //[cite: 46, 57]
         }
 
         // Set the GPIO being tested HIGH
-        E4235_Write(pins[i], 1);[cite: 46, 57]
+        E4235_Write(pins[i], 1); //[cite: 46, 57]
 
         printf("\nGPIO%d is HIGH.\n", pins[i]);
         printf("Measure SN754410NE pin %d.\n", driver_pins[i]);
@@ -61,7 +61,7 @@ void test_motor_gpio(void) {
 
     // Return all GPIOs LOW after testing
     for (int i = 0; i < 4; i++) {
-        E4235_Write(pins[i], 0);[cite: 46, 57]
+        E4235_Write(pins[i], 0); //[cite: 46, 57]
     }
 
     printf("\nAll GPIO tests completed.\n");
@@ -72,17 +72,127 @@ int main() {
     signal(SIGINT, handle_sigint);
 
     // 1. Initialize Hardware and GPIO
-    if (E4235_Init() != 0) {[cite: 46, 56]
+    if (E4235_Init() != 0) { //[cite: 46, 56]
         printf("Failed to initialize E4235 library.\n");
         return -1;
     }
 
     // Set motor and enable pins to OUTPUT (state = 1)
-    E4235_Select(PIN_ENABLE, 1);[cite: 46, 56, 57]
+    E4235_Select(PIN_ENABLE, 1); //[cite: 46, 56, 57]
     int motor_pins[4] = {PIN_A, PIN_B, PIN_C, PIN_D};
     for (int i = 0; i < 4; i++) {
-        E4235_Select(motor_pins[i], 1);[cite: 46, 56, 57]
+        E4235_Select(motor_pins[i], 1); //[cite: 46, 56, 57]
     }
 
     // 2. Initial State Variables
-    int mode = 0;           // 0 = Full step, 1 =
+    int mode = 0;           // 0 = Full step, 1 = Half step
+    int direction = 1;      // 1 = Clockwise, 0 = Counterclockwise
+    int running = 0;        // 0 = Stopped, 1 = Continuous Run
+    int enabled = 0;        // 0 = Disabled, 1 = Enabled
+    float steps_per_sec = 100.0; // Initial step rate
+    
+    // Checkpoint 1 requirement: Print step mode at startup
+    printf("PARMCO Motor Controller Initialized.\n");
+    printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); //[cite: 7]
+    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [Q]uit\n");
+
+    // Run the user-defined GPIO hardware test before unblocking the keyboard
+    test_motor_gpio();
+
+    // 3. Unblock standard input for non-blocking keyboard polling
+    E4235_KYBdeblock(1); //[cite: 46, 52, 53]
+
+    char key = 0;
+
+    while (run_program) {
+        // Read strictly 1 byte at a time in a WHILE loop to instantly drain the buffer
+        while (read(STDIN_FILENO, &key, 1) > 0) {
+            
+            // Ignore trailing newlines or carriage returns
+            if (key == '\n' || key == '\r') {
+                continue;
+            }
+
+            switch (key) {
+                case 'e':
+                case 'E': // Enable/Disable H-Bridge
+                    enabled = !enabled;
+                    enable_routine(PIN_ENABLE, enabled);
+                    printf("Motor %s.\n", enabled ? "ENABLED" : "DISABLED");
+                    break;
+                
+                case 'c':
+                case 'C': // Toggle Direction
+                    direction = !direction;
+                    printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
+                    break;
+
+                case ' ': // Spacebar: One Revolution
+                    if (enabled) {
+                        printf("Executing one revolution...\n");
+                        int steps_needed = (mode == 0) ? 200 : 400; //[cite: 7]
+                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
+                        for (int i = 0; i < steps_needed; i++) {
+                            step_routine(direction, mode, motor_pins);
+                            step_timing_loop(tick_delay);
+                        }
+                        running = 0; // Ensure we stop after one revolution
+                        printf("Revolution complete.\n");
+                    } else {
+                        printf("Cannot step: Motor is disabled.\n");
+                    }
+                    break;
+
+                case 's':
+                case 'S': // Continuous Run / Stop
+                    running = !running;
+                    printf("Motor %s.\n", running ? "RUNNING" : "STOPPED");
+                    break;
+                    
+                case 'u':
+                case 'U': // Faster (increase by ~5%)
+                    steps_per_sec *= 1.05; //[cite: 7]
+                    printf("Speed increased. Current rate: %.2f steps/sec\n", steps_per_sec);
+                    break;
+
+                case 'd':
+                case 'D': // Slower (decrease by ~5%)
+                    steps_per_sec *= 0.95; //[cite: 7]
+                    if (steps_per_sec < 10.0) steps_per_sec = 10.0; // Prevent stalling at zero
+                    printf("Speed decreased. Current rate: %.2f steps/sec\n", steps_per_sec);
+                    break;
+
+                case 'q':
+                case 'Q': // Quit
+                    run_program = 0;
+                    break;
+            }
+            key = 0; 
+        }
+
+        // 4. Continuous Running Logic
+        if (running && enabled) {
+            unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
+            step_routine(direction, mode, motor_pins);
+            step_timing_loop(tick_delay);
+        } else {
+            // Sleep briefly to prevent 100% CPU usage when idle
+            usleep(10000); 
+        }
+    }
+
+    // 5. Cleanup before exit
+    // Drive the 4N25 optocoupler low and set to input so it floats
+    enable_routine(PIN_ENABLE, 0); //[cite: 8]
+    E4235_Select(PIN_ENABLE, 0); //[cite: 46, 56, 57]
+    
+    // De-energize and float the motor coils
+    for (int i = 0; i < 4; i++) {
+        E4235_Write(motor_pins[i], 0); //[cite: 46, 57]
+        E4235_Select(motor_pins[i], 0); //[cite: 46, 56, 57]
+    }
+    
+    E4235_KYBdeblock(0); // Restore blocking IO[cite: 46, 52, 53]
+    printf("\nExiting PARMCO safely.\n");
+    return 0;
+}
