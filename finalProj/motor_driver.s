@@ -26,7 +26,7 @@ half_step_table:
 @ -------------------------------------------------------------------------
 enable_routine:
     @ Push an even number of registers (r4, lr) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4, lr}
+    push {r4, lr}          
     bl E4235_Write
     pop {r4, pc}
 
@@ -36,7 +36,7 @@ enable_routine:
 @ -------------------------------------------------------------------------
 step_routine:
     @ Push 6 registers (24 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4-r8, lr}
+    push {r4-r8, lr}       
     
     mov r4, r0             @ Save direction
     mov r5, r1             @ Save mode
@@ -48,20 +48,20 @@ step_routine:
 
     @ Update step index based on direction
     cmp r4, #1
-    addeq r8, r8, #1       @ If CW, increment
-    subne r8, r8, #1       @ If CCW, decrement
+    addeq r8, r8, #1       
+    subne r8, r8, #1       
 
     @ Handle wrapping based on mode
     cmp r5, #1
     beq half_step_wrap
     
 full_step_wrap:
-    and r8, r8, #3         @ Wrap 0-3 for full step (modulo 4)
+    and r8, r8, #3         
     ldr r4, =full_step_table
     b fetch_pattern
     
 half_step_wrap:
-    and r8, r8, #7         @ Wrap 0-7 for half step (modulo 8)
+    and r8, r8, #7         
     ldr r4, =half_step_table
 
 fetch_pattern:
@@ -69,7 +69,7 @@ fetch_pattern:
     str r8, [r7]
     
     @ Fetch the current bit pattern from the table
-    ldrb r4, [r4, r8]      @ r4 now holds the 4-bit pattern
+    ldrb r4, [r4, r8]      
     
     @ Drive Pin A (Bit 3)
     ldr r0, [r6, #0]       
@@ -98,28 +98,27 @@ fetch_pattern:
 
 @ -------------------------------------------------------------------------
 @ step_timing_loop
-@ Waits until the next step is due using the ARM generic timer[cite: 9].
+@ Waits until the next step is due using the ARM generic timer[cite: 8, 9].
 @ -------------------------------------------------------------------------
 step_timing_loop:
     @ Push 4 registers (16 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4, r5, r6, lr}
+    push {r4, r5, r6, lr}  
     mov r4, r0             @ Save target delay in ticks
     
-    @ Read CNTVCT: START time lower half in r5, upper half in r6
-    mrrc p15, 1, r5, r6, c14
+    @ Read the 64-bit CNTPCT (Physical Count) into r5(lower) and r6(upper)
+    mrrc p15, 1, r5, r6, c14 
 
 wait_loop:
-    @ Read CNTVCT: CURRENT time lower half in r1, upper half in r2
-    mrrc p15, 1, r1, r2, c14
+    @ Read the 64-bit CNTPCT into r1(lower) and r2(upper)
+    mrrc p15, 1, r1, r2, c14 
     
-    @ Calculate elapsed time (Current - Start)
+    @ Calculate elapsed time (Current Lower - Start Lower)
     sub r1, r1, r5
-    
+
     @ Compare elapsed time against target delay
-    cmp r1, r4
+    cmp r2, r4
     
-    @ blo (Branch if Lower) performs an UNSIGNED comparison, 
-    @ completely immune to the signed wrap-around bug!
+    @ blo (Branch if Lower) performs an UNSIGNED comparison, immune to wraps
     blo wait_loop
 
     pop {r4, r5, r6, pc}
