@@ -8,6 +8,7 @@
 extern void enable_routine(int pin, int state);
 extern void step_routine(int direction, int mode, int* pins);
 extern void step_timing_loop(unsigned int ticks);
+extern unsigned int get_timer_frequency(void);
 
 // Define GPIO pins (Updated to match actual wiring)
 #define PIN_ENABLE 24
@@ -91,6 +92,11 @@ int main() {
         return -1;
     }
 
+    unsigned int actual_freq = get_timer_frequency();
+
+    printf("ARM Generic Timer Frequency: %u Hz\n", actual_freq);
+    printf("Currently Configured Frequency: %u Hz\n", TIMER_FREQ);
+
     // Set motor and enable pins to OUTPUT (state = 1)
     E4235_Select(PIN_ENABLE, 1); //[cite: 46, 56, 57]
     int motor_pins[4] = {PIN_A, PIN_B, PIN_C, PIN_D};
@@ -108,7 +114,7 @@ int main() {
     // Checkpoint 1 requirement: Print step mode at startup
     printf("PARMCO Motor Controller Initialized.\n");
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); //[cite: 7]
-    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [Q]uit\n");
+    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n");
 
     // Run the user-defined GPIO hardware test before unblocking the keyboard
     test_motor_gpio();
@@ -176,6 +182,23 @@ int main() {
                     printf("Speed decreased. Current rate: %.2f steps/sec\n", steps_per_sec);
                     break;
 
+		case 't':
+		case 'T': // Test one assembly motor step
+    			running = 0;
+
+    			// Keep H-bridge disabled during signal testing
+    			enabled = 0;
+		    	enable_routine(PIN_ENABLE, 0);
+
+   			// Advance the assembly stepping sequence once
+   			step_routine(direction, mode, motor_pins);
+
+   			printf("\nAssembly step executed.\n");
+			printf("Direction: %s\n",
+			direction ? "Clockwise" : "Counterclockwise");
+   		 	printf("Measure SN754410NE input pins 2, 7, 10, and 15.\n");
+		    	printf("Press T to advance to the next step.\n\n");
+    			break;
                 case 'q':
                 case 'Q': // Quit
                     run_program = 0;

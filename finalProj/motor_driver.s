@@ -8,9 +8,7 @@ current_step:
 @ Full-step coil patterns (4 steps: AB, BC, CD, DA)
 @ Bits correspond to coils: 3=A, 2=B, 1=C, 0=D
 full_step_table:
-    .byte 0b1010, 0b0110, 0b0101, 0b1001
-
-@ Half-step coil patterns (8 steps)
+    .byte 0b1010, 0b1001, 0b0101, 0b0110
 half_step_table:
     .byte 0b1000, 0b1010, 0b0010, 0b0110, 0b0100, 0b0101, 0b0001, 0b1001
 
@@ -96,29 +94,41 @@ fetch_pattern:
 
     pop {r4-r8, pc}
 
-@ -------------------------------------------------------------------------
+@ ---------------------------------------------------------
 @ step_timing_loop
-@ Waits until the next step is due using the ARM generic timer[cite: 8, 9].
-@ -------------------------------------------------------------------------
+@ r0 = delay in timer ticks
+@ ---------------------------------------------------------
 step_timing_loop:
-    @ Push 4 registers (16 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4, r5, r6, lr}  
-    mov r4, r0             @ Save target delay in ticks
-    
-    @ Read the 64-bit CNTPCT (Physical Count) into r5(lower) and r6(upper)
-    mrrc p15, 1, r5, r6, c14 
+    push {r4-r6, lr}
+
+    mov r4, r0
+
+    @ Read starting timer count
+    mrrc p15, 1, r5, r6, c14
 
 wait_loop:
-    @ Read the 64-bit CNTPCT into r1(lower) and r2(upper)
-    mrrc p15, 1, r1, r2, c14 
-    
-    @ Calculate elapsed time (Current Lower - Start Lower)
+    @ Read current timer count
+    mrrc p15, 1, r1, r2, c14
+
+    @ Calculate elapsed ticks using lower 32 bits
     sub r1, r1, r5
 
-    @ Compare elapsed time against target delay
-    cmp r2, r4
-    
-    @ blo (Branch if Lower) performs an UNSIGNED comparison, immune to wraps
+    @ Compare elapsed ticks to requested delay
+    cmp r1, r4
+
     blo wait_loop
 
-    pop {r4, r5, r6, pc}
+    pop {r4-r6, pc}
+
+@ ---------------------------------------------------------
+@ get_timer_frequency
+@ Reads the ARM generic timer frequency (CNTFRQ)
+@ Returns frequency in Hz through r0
+@ ---------------------------------------------------------
+
+.global get_timer_frequency
+
+get_timer_frequency:
+    mrc p15, 0, r0, c14, c0, 0
+    bx lr
+
