@@ -194,10 +194,9 @@ int main() {
                     printf("Speed decreased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
 
-		case 't':
-		case 't':
-                case 'T': // Test one assembly motor step
-                    running = 0; // Stop continuous run
+		        case 't':
+		        case 'T': // Test one assembly motor step
+		            running = 0; // Stop continuous run
 
                     if (enabled) {
                         // Advance the assembly stepping sequence once
@@ -212,10 +211,10 @@ int main() {
                         printf("Press E to enable the motor first.\n\n");
                     }
                     break;
-            case 'q':
-            case 'Q': // Quit
-                run_program = 0;
-                break;
+                case 'q':
+                case 'Q': // Quit
+                    run_program = 0;
+                    break;
             }
             key = 0; 
         }
