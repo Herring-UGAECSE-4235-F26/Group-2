@@ -117,7 +117,7 @@ int main() {
     printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n");
 
     // Run the user-defined GPIO hardware test before unblocking the keyboard
-    test_motor_gpio();
+    //test_motor_gpio();
 
     // 3. Unblock standard input for non-blocking keyboard polling
     E4235_KYBdeblock(1); //[cite: 46, 52, 53]
