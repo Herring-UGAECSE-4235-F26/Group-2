@@ -198,20 +198,18 @@ int main() {
                 case 'T': // Test one assembly motor step
                     running = 0; // Stop continuous run
 
-                    // To physically move the motor, the H-bridge must be enabled
-                    if (!enabled) {
-                        enabled = 1;
-                        enable_routine(PIN_ENABLE, 1);
-                        printf("Motor automatically ENABLED for step.\n");
+                    if (enabled) {
+                        // Advance the assembly stepping sequence once
+                        step_routine(direction, mode, motor_pins); 
+                        
+                        printf("\nAssembly step executed.\n");
+                        printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
+                        printf("Motor stepped. Measure SN754410NE input pins 2, 7, 10, and 15 if needed.\n");
+                        printf("Press T to advance to the next step.\n\n");
+                    } else {
+                        printf("\nCannot step: Motor is currently DISABLED and will not move.\n");
+                        printf("Press E to enable the motor first.\n\n");
                     }
-
-                    // Advance the assembly stepping sequence once
-                    step_routine(direction, mode, motor_pins); 
-                    
-                    printf("\nAssembly step executed.\n");
-                    printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
-                    printf("Motor stepped. Measure SN754410NE input pins 2, 7, 10, and 15 if needed.\n");
-                    printf("Press T to advance to the next step.\n\n");
                     break;
             }
             key = 0; 
