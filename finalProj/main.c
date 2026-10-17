@@ -138,9 +138,21 @@ int main() {
                 case 'E': // Enable/Disable H-Bridge
                     enabled = !enabled;
                     enable_routine(PIN_ENABLE, enabled);
+                    
+                    if (enabled) {
+                        // Software Fix: Apply the current coil pattern immediately 
+                        // so the motor snaps into holding torque right when enabled.
+                        step_routine(direction, mode, motor_pins);
+                    } else {
+                        // Software Failsafe: De-energize all coils. This forces the 
+                        // motor to free up even if the hardware enable pins are floating[cite: 8].
+                        for (int i = 0; i < 4; i++) {
+                            E4235_Write(motor_pins[i], 0); //[cite: 46, 57]
+                        }
+                    }
+                    
                     printf("Motor %s.\n", enabled ? "ENABLED" : "DISABLED");
                     break;
-                
                 case 'c':
                 case 'C': // Toggle Direction
                     direction = !direction;
