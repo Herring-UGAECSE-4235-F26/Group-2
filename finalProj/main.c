@@ -178,20 +178,20 @@ int main() {
                 case 's':
                 case 'S': // Continuous Run / Stop
                     running = !running;
-                    printf("Motor %s.\n", running ? "RUNNING" : "STOPPED");
+                    printf("Motor %s in %s mode.\n", running ? "RUNNING" : "STOPPED", mode == 0 ? "Full Step" : "Half Step");
                     break;
                     
                 case 'u':
                 case 'U': // Faster (increase by ~5%)
                     steps_per_sec *= 1.05; //[cite: 7]
-                    printf("Speed increased. Current rate: %.2f steps/sec\n", steps_per_sec);
+                    printf("Speed increased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
 
                 case 'd':
                 case 'D': // Slower (decrease by ~5%)
                     steps_per_sec *= 0.95; //[cite: 7]
                     if (steps_per_sec < 10.0) steps_per_sec = 10.0; // Prevent stalling at zero
-                    printf("Speed decreased. Current rate: %.2f steps/sec\n", steps_per_sec);
+                    printf("Speed decreased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
 
 		case 't':
