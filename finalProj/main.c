@@ -195,6 +195,7 @@ int main() {
                     break;
 
 		case 't':
+		case 't':
                 case 'T': // Test one assembly motor step
                     running = 0; // Stop continuous run
 
@@ -211,6 +212,10 @@ int main() {
                         printf("Press E to enable the motor first.\n\n");
                     }
                     break;
+            case 'q':
+            case 'Q': // Quit
+                run_program = 0;
+                break;
             }
             key = 0; 
         }
