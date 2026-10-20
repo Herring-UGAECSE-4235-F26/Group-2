@@ -105,7 +105,7 @@ int main() {
     }
 
     // 2. Initial State Variables
-    int mode = 1;           // 0 = Full step, 1 = Half step
+    int mode = 0;           // 0 = Full step, 1 = Half step
     int direction = 1;      // 1 = Clockwise, 0 = Counterclockwise
     int running = 0;        // 0 = Stopped, 1 = Continuous Run
     int enabled = 0;        // 0 = Disabled, 1 = Enabled
@@ -182,8 +182,8 @@ int main() {
                     break;
                     
                 case 'u':
-                case 'U': // Faster (increase by ~5%)
-                    steps_per_sec *= 1.05; //[cite: 7]
+                case 'U': // Faster (increase by ~2%)
+                    steps_per_sec *= 1.02; //[cite: 7]
                     printf("Speed increased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
 
