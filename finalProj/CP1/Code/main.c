@@ -105,7 +105,7 @@ int main() {
     }
 
     // 2. Initial State Variables
-    int mode = 0;           // 0 = Full step, 1 = Half step
+    int mode = 1;           // 0 = Full step, 1 = Half step
     int direction = 1;      // 1 = Clockwise, 0 = Counterclockwise
     int running = 0;        // 0 = Stopped, 1 = Continuous Run
     int enabled = 0;        // 0 = Disabled, 1 = Enabled
