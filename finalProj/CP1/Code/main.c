@@ -165,7 +165,7 @@ int main() {
                         int steps_needed = (mode == 0) ? 200 : 400;
                         
                         // Increased from 20.0 to 22.0 steps/sec (10% faster)
-                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / 25.0); 
+                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / 40.0); 
                         
                         for (int i = 0; i < steps_needed; i++) {
                             step_routine(direction, mode, motor_pins);
