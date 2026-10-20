@@ -159,13 +159,13 @@ int main() {
                     printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
                     break;
 
-                case ' ': // Spacebar: One Revolution (Crawl Test)
+                case ' ': // Spacebar: One Revolution (10% Faster)
                     if (enabled) {
-                        printf("Executing slow constant-speed revolution to test mechanics...\n");
+                        printf("Executing single revolution at 22 steps/sec...\n");
                         int steps_needed = (mode == 0) ? 200 : 400;
                         
-                        // Force a very slow 20 steps/sec speed with NO acceleration ramp
-                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / 20.0); 
+                        // Increased from 20.0 to 22.0 steps/sec (10% faster)
+                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / 22.0); 
                         
                         for (int i = 0; i < steps_needed; i++) {
                             step_routine(direction, mode, motor_pins);
