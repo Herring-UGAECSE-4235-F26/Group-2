@@ -161,10 +161,25 @@ int main() {
 
                 case ' ': // Spacebar: One Revolution
                     if (enabled) {
-                        printf("Executing one revolution...\n");
-                        int steps_needed = (mode == 0) ? 200 : 400; //[cite: 7]
-                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
+                        printf("Executing one revolution with acceleration profile...\n");
+                        int steps_needed = (mode == 0) ? 200 : 400;
+                        
+                        // Start slow, peak at a target speed, then slow down
+                        float current_rev_speed = 20.0; // Start at 20 steps/sec
+                        float target_rev_speed = 100.0; // Peak at 100 steps/sec
+                        
                         for (int i = 0; i < steps_needed; i++) {
+                            // Acceleration Phase (first 25% of steps)
+                            if (i < steps_needed / 4 && current_rev_speed < target_rev_speed) {
+                                current_rev_speed += 2.0; 
+                            }
+                            // Deceleration Phase (last 25% of steps)
+                            else if (i > (steps_needed * 3) / 4 && current_rev_speed > 20.0) {
+                                current_rev_speed -= 2.0;
+                            }
+
+                            unsigned int tick_delay = (unsigned int)(TIMER_FREQ / current_rev_speed);
+                            
                             step_routine(direction, mode, motor_pins);
                             step_timing_loop(tick_delay);
                         }
