@@ -159,16 +159,19 @@ int main() {
                     printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
                     break;
 
-                case ' ': // Spacebar: One Revolution
+                case ' ': // Spacebar: One Revolution (10% Faster)
                     if (enabled) {
-                        printf("Executing one revolution...\n");
-                        int steps_needed = (mode == 0) ? 200 : 400; //[cite: 7]
-                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
+                        printf("Executing single revolution at 22 steps/sec...\n");
+                        int steps_needed = (mode == 0) ? 200 : 400;
+                        
+                        // Increased from 20.0 to 22.0 steps/sec (10% faster)
+                        unsigned int tick_delay = (unsigned int)(TIMER_FREQ / 40.0); 
+                        
                         for (int i = 0; i < steps_needed; i++) {
                             step_routine(direction, mode, motor_pins);
                             step_timing_loop(tick_delay);
                         }
-                        running = 0; // Ensure we stop after one revolution
+                        running = 0; 
                         printf("Revolution complete.\n");
                     } else {
                         printf("Cannot step: Motor is disabled.\n");
