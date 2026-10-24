@@ -3,8 +3,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
-#include <poll.h>
-#include <fcntl.h>
 #include "E4235.h"
 
 extern void enable_routine(int pin, int state);
@@ -15,15 +13,18 @@ extern void increment_edge_count(void);
 extern int get_and_reset_count(void);
 extern unsigned int get_current_timer(void);
 
+// Expose the internal memory pointer from the E4235 library
+extern volatile unsigned int *gpio_mem_ptr;
+
 #define PIN_ENABLE 24
 #define PIN_A 17
 #define PIN_B 27
 #define PIN_C 22
 #define PIN_D 23
-#define PIN_IR_SENSOR 13 // Changed to GPIO 13
+#define PIN_IR_SENSOR 13
 
 #define TIMER_FREQ 54000000
-#define PROPELLER_BLADES 2 // Adjust based on your physical propeller
+#define PROPELLER_BLADES 2 
 
 volatile int run_program = 1;
 
@@ -31,33 +32,25 @@ void handle_sigint(int sig) {
     run_program = 0;
 }
 
-void* ir_interrupt_thread(void* arg) {
-    // Setup sysfs path for GPIO 13
-    int fd = open("/sys/class/gpio/gpio13/value", O_RDONLY);
-    if (fd < 0) {
-        printf("\n[!] IR Thread Error: Could not open GPIO 13 sysfs value.\n");
-        printf("    Ensure you run these terminal commands before executing:\n");
-        printf("    echo 13 > /sys/class/gpio/export\n");
-        printf("    echo falling > /sys/class/gpio/gpio13/edge\n");
-        return NULL;
-    }
-
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLPRI; // Wait for urgent data (hardware interrupt edge)
-    char buf[8];
-
+// Background thread to poll the GPIO memory register at 1000 Hz
+void* ir_polling_thread(void* arg) {
+    int last_state = 1; // Assume HIGH (unbroken beam) initially
+    
     while(run_program) {
-        lseek(fd, 0, SEEK_SET);
-        read(fd, buf, sizeof(buf)); // Clear previous interrupt
+        // GPLEV0 (GPIO Level 0) register is at offset 0x34 bytes (index 13)
+        // Bit 13 corresponds to the physical state of GPIO 13
+        int current_state = (gpio_mem_ptr[13] & (1 << PIN_IR_SENSOR)) ? 1 : 0;
         
-        // Poll with 500ms timeout so the thread can exit gracefully when run_program goes to 0
-        int ret = poll(&pfd, 1, 500); 
-        if (ret > 0 && (pfd.revents & POLLPRI)) {
+        // Detect falling edge: beam was unbroken (1), now broken (0)
+        if (last_state == 1 && current_state == 0) {
             increment_edge_count(); // Trigger Assembly Counter
         }
+        
+        last_state = current_state;
+        
+        // Sleep 1 millisecond (1000 Hz sampling rate) to prevent 100% CPU usage
+        usleep(1000); 
     }
-    close(fd);
     return NULL;
 }
 
@@ -78,9 +71,12 @@ int main() {
         E4235_Select(motor_pins[i], 1); 
     }
 
-    // Start IR Sensor Interrupt Thread
+    // Configure GPIO 13 as an INPUT (0) so it doesn't fight the sensor
+    E4235_Select(PIN_IR_SENSOR, 0);
+
+    // Start IR Sensor Polling Thread
     pthread_t ir_thread;
-    if(pthread_create(&ir_thread, NULL, ir_interrupt_thread, NULL) != 0) {
+    if(pthread_create(&ir_thread, NULL, ir_polling_thread, NULL) != 0) {
         printf("Failed to start IR sensor thread.\n");
     }
 
@@ -90,7 +86,6 @@ int main() {
     int enabled = 0;        
     float steps_per_sec = 100.0; 
     
-    // Initial fetch to flush any startup noise and establish timing baseline
     unsigned int last_rpm_time = get_current_timer();
     get_and_reset_count(); 
 
@@ -165,7 +160,6 @@ int main() {
                     break;
                 case 'r':
                 case 'R': {
-                    // Checkpoint 2: Highly accurate RPM Calculation using the ARM 64-bit Timer
                     unsigned int current_time = get_current_timer();
                     unsigned int elapsed_ticks = current_time - last_rpm_time;
                     float elapsed_seconds = (float)elapsed_ticks / TIMER_FREQ;
@@ -207,7 +201,7 @@ int main() {
     }
     
     E4235_KYBdeblock(0); 
-    pthread_join(ir_thread, NULL); // Safely close the IR thread
+    pthread_join(ir_thread, NULL); 
     printf("\nExiting PARMCO safely.\n");
     return 0;
 }

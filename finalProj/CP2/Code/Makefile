@@ -1,7 +1,6 @@
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -g
-# Added -pthread to link the POSIX threads library
 LDFLAGS = -lE4235 -pthread
 
 # Target executable name
@@ -21,14 +20,6 @@ main.o: main.c
 
 motor_driver.o: motor_driver.s
 	$(CC) $(CFLAGS) -c motor_driver.s
-
-# Target to automatically configure the IR sensor GPIO pins
-setup_ir:
-	@echo "Configuring GPIO 13 for IR sensor hardware interrupts..."
-	-@sh -c 'echo 13 > /sys/class/gpio/export' 2>/dev/null || true
-	@sleep 0.5
-	@sh -c 'echo falling > /sys/class/gpio/gpio13/edge'
-	@echo "GPIO 13 configured successfully."
 
 clean:
 	rm -f $(OBJS) $(TARGET)
