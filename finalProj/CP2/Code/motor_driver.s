@@ -1,134 +1,95 @@
+
 .data
 .align 2
+current_step:      .word 0
+edge_count:        .word 0
 
-@ Tracks the current position in the step sequence (0-7)
-current_step: 
-    .word 0
-
-@ Full-step coil patterns (4 steps: AB, BC, CD, DA)
-@ Bits correspond to coils: 3=A, 2=B, 1=C, 0=D
-full_step_table:
-    .byte 0b1010, 0b1001, 0b0101, 0b0110
-half_step_table:
-    .byte 0b1000, 0b1010, 0b0010, 0b0110, 0b0100, 0b0101, 0b0001, 0b1001
+full_step_table:     .byte 0b1010, 0b1001, 0b0101, 0b0110
+half_step_table:     .byte 0b1000, 0b1010, 0b0010, 0b0110, 0b0100, 0b0101, 0b0001, 0b1001
 
 .text
 .global enable_routine
 .global step_routine
 .global step_timing_loop
+.global get_timer_frequency
+.global increment_edge_count
+.global get_and_reset_count
+.global get_current_timer
 .extern E4235_Write
 
-@ -------------------------------------------------------------------------
-@ enable_routine
-@ Turns the H-bridge on or off through the 4N25 optocoupler.
-@ -------------------------------------------------------------------------
 enable_routine:
-    @ Push an even number of registers (r4, lr) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4, lr}          
+    push {r4, lr}
     bl E4235_Write
     pop {r4, pc}
 
-@ -------------------------------------------------------------------------
-@ step_routine
-@ Looks up the next coil pattern and drives the SN754410NE inputs.
-@ -------------------------------------------------------------------------
 step_routine:
-    @ Push 6 registers (24 bytes) to maintain 8-byte AAPCS stack alignment[cite: 9]
-    push {r4-r8, lr}       
-    
-    mov r4, r0             @ Save direction
-    mov r5, r1             @ Save mode
-    mov r6, r2             @ Save pin array pointer
-    
-    @ Load current step index
+    push {r4-r8, lr}
+    mov r4, r0
+    mov r5, r1
+    mov r6, r2
     ldr r7, =current_step
     ldr r8, [r7]
-
-    @ Update step index based on direction
     cmp r4, #1
-    addeq r8, r8, #1       
-    subne r8, r8, #1       
-
-    @ Handle wrapping based on mode
+    addeq r8, r8, #1
+    subne r8, r8, #1
     cmp r5, #1
     beq half_step_wrap
-    
 full_step_wrap:
-    and r8, r8, #3         
+    and r8, r8, #3
     ldr r4, =full_step_table
     b fetch_pattern
-    
 half_step_wrap:
-    and r8, r8, #7         
+    and r8, r8, #7
     ldr r4, =half_step_table
-
 fetch_pattern:
-    @ Store updated step index
     str r8, [r7]
-    
-    @ Fetch the current bit pattern from the table
-    ldrb r4, [r4, r8]      
-    
-    @ Drive Pin A (Bit 3)
-    ldr r0, [r6, #0]       
+    ldrb r4, [r4, r8]
+    ldr r0, [r6, #0]
     and r1, r4, #0b1000
-    lsr r1, r1, #3         
+    lsr r1, r1, #3
     bl E4235_Write
-
-    @ Drive Pin B (Bit 2)
-    ldr r0, [r6, #4]       
+    ldr r0, [r6, #4]
     and r1, r4, #0b0100
     lsr r1, r1, #2
     bl E4235_Write
-
-    @ Drive Pin C (Bit 1)
-    ldr r0, [r6, #8]       
+    ldr r0, [r6, #8]
     and r1, r4, #0b0010
     lsr r1, r1, #1
     bl E4235_Write
-
-    @ Drive Pin D (Bit 0)
-    ldr r0, [r6, #12]      
+    ldr r0, [r6, #12]
     and r1, r4, #0b0001
     bl E4235_Write
-
     pop {r4-r8, pc}
 
-@ ---------------------------------------------------------
-@ step_timing_loop
-@ r0 = delay in timer ticks
-@ ---------------------------------------------------------
 step_timing_loop:
     push {r4-r6, lr}
-
     mov r4, r0
-
-    @ Read starting timer count
     mrrc p15, 1, r5, r6, c14
-
 wait_loop:
-    @ Read current timer count
     mrrc p15, 1, r1, r2, c14
-
-    @ Calculate elapsed ticks using lower 32 bits
     sub r1, r1, r5
-
-    @ Compare elapsed ticks to requested delay
     cmp r1, r4
-
     blo wait_loop
-
     pop {r4-r6, pc}
-
-@ ---------------------------------------------------------
-@ get_timer_frequency
-@ Reads the ARM generic timer frequency (CNTFRQ)
-@ Returns frequency in Hz through r0
-@ ---------------------------------------------------------
-
-.global get_timer_frequency
 
 get_timer_frequency:
     mrc p15, 0, r0, c14, c0, 0
     bx lr
 
+increment_edge_count:
+    ldr r0, =edge_count
+    ldr r1, [r0]
+    add r1, r1, #1
+    str r1, [r0]
+    bx lr
+
+get_and_reset_count:
+    ldr r1, =edge_count
+    ldr r0, [r1]
+    mov r2, #0
+    str r2, [r1]
+    bx lr
+
+get_current_timer:
+    mrrc p15, 1, r0, r1, c14
+    bx lr
