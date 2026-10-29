@@ -89,9 +89,14 @@ int main() {
     unsigned int last_rpm_time = get_current_timer();
     get_and_reset_count(); 
 
+    // Moving average variables to smooth out RPM jitter at low speeds
+    #define RPM_WINDOW 4
+    int edge_history[RPM_WINDOW] = {0};
+    int history_idx = 0;
+
     printf("PARMCO Motor Controller CP2 Initialized.\n");
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); 
-    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n");
+    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n\n");
 
     E4235_KYBdeblock(1); 
     char key = 0;
@@ -163,16 +168,7 @@ int main() {
                     break;
                 case 'r':
                 case 'R': {
-                    // Manual forced RPM printout (optional, continuous display now handles this)
-                    unsigned int current_time = get_current_timer();
-                    unsigned int elapsed_ticks = current_time - last_rpm_time;
-                    float elapsed_seconds = (float)elapsed_ticks / TIMER_FREQ;
-                    int edges = get_and_reset_count();
-                    float rpm = (edges / (float)PROPELLER_BLADES) * (60.0 / elapsed_seconds);
-                    
-                    printf("--- Manual RPM Check ---\n");
-                    printf("Edges detected: %d | Elapsed time: %.3f sec | Actual Speed: %.2f RPM\n", edges, elapsed_seconds, rpm);
-                    last_rpm_time = current_time;
+                    printf("--- Manual RPM Check Triggered ---\n");
                     break;
                 }
                 case 'q':
@@ -183,44 +179,20 @@ int main() {
             key = 0;
         }
 
-        // CP2 Requirement: Continuous Status Display
+        // CP2 Requirement: Continuous Status Display with Moving Average
         unsigned int current_time = get_current_timer();
-        if ((current_time - last_rpm_time) >= (TIMER_FREQ / 2)) { // Update every 0.5 seconds
+        if ((current_time - last_rpm_time) >= (TIMER_FREQ / 2)) { // Trigger every 0.5 seconds
             float elapsed_seconds = (float)(current_time - last_rpm_time) / TIMER_FREQ;
             int edges = get_and_reset_count();
-            float rpm = (edges / (float)PROPELLER_BLADES) * (60.0 / elapsed_seconds);
             
-            // Print status bar with a carriage return to overwrite the line
-            printf("\r[STATUS] Motor: %-7s | Dir: %-3s | Target: %5.1f steps/s | RPM: %6.2f    ", 
-                (running && enabled) ? "RUNNING" : "STOPPED",
-                direction ? "CW" : "CCW",
-                steps_per_sec,
-                rpm);
-            fflush(stdout); // Force print to console immediately
+            // Insert latest edge count into the circular buffer
+            edge_history[history_idx] = edges;
+            history_idx = (history_idx + 1) % RPM_WINDOW;
             
-            last_rpm_time = current_time;
-        }
-
-        if (running && enabled) {
-            unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
-            step_routine(direction, mode, motor_pins);
-            step_timing_loop(tick_delay);
-        } else {
-            usleep(10000); 
-        }
-    }
-
-    // Clear status bar on exit
-    printf("\r                                                                                \r");
-    enable_routine(PIN_ENABLE, 0); 
-    E4235_Select(PIN_ENABLE, 0); 
-    for (int i = 0; i < 4; i++) {
-        E4235_Write(motor_pins[i], 0); 
-        E4235_Select(motor_pins[i], 0); 
-    }
-    
-    E4235_KYBdeblock(0); 
-    pthread_join(ir_thread, NULL); 
-    printf("Exiting PARMCO safely.\n");
-    return 0;
-}
+            // Sum the historical window
+            int total_edges = 0;
+            for(int i = 0; i < RPM_WINDOW; i++) {
+                total_edges += edge_history[i];
+            }
+            
+            // Calculate RPM based on the total historical window time (4 * 0
