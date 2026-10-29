@@ -194,5 +194,6 @@ int main() {
             for(int i = 0; i < RPM_WINDOW; i++) {
                 total_edges += edge_history[i];
             }
+        }
             
             // Calculate RPM based on the total historical window time (4 * 0
