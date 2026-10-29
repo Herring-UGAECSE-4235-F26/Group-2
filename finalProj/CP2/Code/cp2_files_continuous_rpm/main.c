@@ -194,6 +194,48 @@ int main() {
             for(int i = 0; i < RPM_WINDOW; i++) {
                 total_edges += edge_history[i];
             }
-        }
             
-            // Calculate RPM based on the total historical window time (4 * 0
+            // Calculate RPM based on the total historical window time (4 * 0.5s = 2.0 seconds)
+            float total_window_time = elapsed_seconds * RPM_WINDOW;
+            float rpm = (total_edges / (float)PROPELLER_BLADES) * (60.0 / total_window_time);
+            
+            // Zero out residual RPM instantly if the motor is explicitly stopped
+            if (!running || !enabled) {
+                rpm = 0.0;
+                for(int i = 0; i < RPM_WINDOW; i++) edge_history[i] = 0; // flush buffer
+            }
+
+            // Print status bar with a carriage return to overwrite the line
+            printf("\r[STATUS] Motor: %-7s | Dir: %-3s | Target: %5.1f steps/s | RPM: %6.2f    ", 
+                (running && enabled) ? "RUNNING" : "STOPPED",
+                direction ? "CW" : "CCW",
+                steps_per_sec,
+                rpm);
+            fflush(stdout); // Force print to console immediately
+            
+            last_rpm_time = current_time;
+        }
+
+        if (running && enabled) {
+            unsigned int tick_delay = (unsigned int)(TIMER_FREQ / steps_per_sec);
+            step_routine(direction, mode, motor_pins);
+            step_timing_loop(tick_delay);
+        } else {
+            usleep(10000); 
+        }
+    }
+
+    // Clear status bar on exit
+    printf("\r                                                                                \r");
+    enable_routine(PIN_ENABLE, 0); 
+    E4235_Select(PIN_ENABLE, 0); 
+    for (int i = 0; i < 4; i++) {
+        E4235_Write(motor_pins[i], 0); 
+        E4235_Select(motor_pins[i], 0); 
+    }
+    
+    E4235_KYBdeblock(0); 
+    pthread_join(ir_thread, NULL); 
+    printf("Exiting PARMCO safely.\n");
+    return 0;
+}
