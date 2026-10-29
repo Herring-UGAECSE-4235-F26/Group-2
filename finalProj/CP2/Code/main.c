@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -112,27 +113,32 @@ int main() {
                     }
                     printf("Motor %s.\n", enabled ? "ENABLED" : "DISABLED");
                     break;
+
                 case 'c':
                 case 'C': 
                     direction = !direction;
                     printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
                     break;
+
                 case 's':
                 case 'S': 
                     running = !running;
                     printf("Motor %s in %s mode.\n", running ? "RUNNING" : "STOPPED", mode == 0 ? "Full Step" : "Half Step");
                     break;
+
                 case 'u':
                 case 'U': 
                     steps_per_sec *= 1.02; 
                     printf("Speed increased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
+
                 case 'd':
                 case 'D': 
                     steps_per_sec *= 0.98; 
                     if (steps_per_sec < 10.0) steps_per_sec = 10.0; 
                     printf("Speed decreased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
+
                 case ' ': 
                     if (enabled) {
                         printf("Executing slow constant-speed revolution...\n");
@@ -148,6 +154,7 @@ int main() {
                         printf("Cannot step: Motor is disabled.\n");
                     }
                     break;
+
                 case 't':
                 case 'T': 
                     running = 0; 
@@ -158,24 +165,43 @@ int main() {
                         printf("\nCannot step: Motor is currently DISABLED and will not move.\n");
                     }
                     break;
+
                 case 'r':
                 case 'R': {
                     unsigned int current_time = get_current_timer();
                     unsigned int elapsed_ticks = current_time - last_rpm_time;
                     float elapsed_seconds = (float)elapsed_ticks / TIMER_FREQ;
-                    
+
+                    // Read and reset the IR sensor edge counter
                     int edges = get_and_reset_count();
-                    float rpm = (edges / (float)PROPELLER_BLADES) * (60.0 / elapsed_seconds);
-                    
+
+                    // CP1 calculation: RPM based on commanded motor step rate
+                    int steps_per_revolution = (mode == 0) ? 200 : 400;
+                    float calculated_rpm = (steps_per_sec * 60.0f) / steps_per_revolution;
+
+                    // CP2 calculation: actual RPM based on IR sensor readings
+                    float actual_rpm = 0.0f;
+
+                    if (elapsed_seconds > 0.0f) {
+                        actual_rpm = (edges / (float)PROPELLER_BLADES)
+                                     * (60.0f / elapsed_seconds);
+                    }
+
+                    // Display both RPM values for comparison
                     printf("\n--- RPM Check ---\n");
+                    printf("Step Mode: %s\n",
+                           mode == 0 ? "Full Step" : "Half Step");
+                    printf("Commanded Step Rate: %.2f steps/sec\n", steps_per_sec);
+                    printf("Calculated RPM (CP1 Method): %.2f RPM\n", calculated_rpm);
+                    printf("Measured RPM (IR Sensor): %.2f RPM\n", actual_rpm);
                     printf("Edges detected: %d\n", edges);
                     printf("Elapsed time: %.3f sec\n", elapsed_seconds);
-                    printf("Actual Speed: %.2f RPM\n", rpm);
                     printf("-----------------\n");
-                    
+
                     last_rpm_time = current_time;
                     break;
                 }
+
                 case 'q':
                 case 'Q': 
                     run_program = 0;
