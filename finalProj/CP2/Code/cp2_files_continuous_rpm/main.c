@@ -28,6 +28,11 @@ extern volatile unsigned int *gpio_mem_ptr;
 
 volatile int run_program = 1;
 
+// Global variables for edge timing
+volatile unsigned int last_edge_time = 0;
+volatile unsigned int total_elapsed_ticks = 0;
+volatile int edge_trigger_count = 0;
+
 void handle_sigint(int sig) {
     run_program = 0;
 }
@@ -43,12 +48,20 @@ void* ir_polling_thread(void* arg) {
         
         // Detect falling edge: beam was unbroken (1), now broken (0)
         if (last_state == 1 && current_state == 0) {
-            increment_edge_count(); // Trigger Assembly Counter
+            unsigned int current_time = get_current_timer();
+            
+            // If this isn't the very first edge, calculate time since last edge
+            if (last_edge_time != 0) {
+                total_elapsed_ticks += (current_time - last_edge_time);
+            }
+            
+            last_edge_time = current_time;
+            edge_trigger_count++;
+            
+            increment_edge_count(); // Keep assembly counter synced for redundancy
         }
         
         last_state = current_state;
-        
-        // Sleep 1 millisecond (1000 Hz sampling rate) to prevent 100% CPU usage
         usleep(1000); 
     }
     return NULL;
@@ -86,13 +99,8 @@ int main() {
     int enabled = 0;        
     float steps_per_sec = 100.0; 
     
-    unsigned int last_rpm_time = get_current_timer();
-    get_and_reset_count(); 
-
-    // Moving average variables to smooth out RPM jitter
-    #define RPM_WINDOW 5
-    int edge_history[RPM_WINDOW] = {0};
-    int history_idx = 0;
+    unsigned int last_display_time = get_current_timer();
+    float current_rpm = 0.0;
 
     printf("PARMCO Motor Controller CP2 Initialized.\n");
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); 
@@ -166,11 +174,6 @@ int main() {
                         printf("Cannot step: Motor is currently DISABLED and will not move.\n");
                     }
                     break;
-                case 'r':
-                case 'R': {
-                    printf("--- Manual RPM Check Triggered ---\n");
-                    break;
-                }
                 case 'q':
                 case 'Q': 
                     run_program = 0;
@@ -179,30 +182,32 @@ int main() {
             key = 0;
         }
 
-        // CP2 Requirement: Continuous Status Display with Moving Average
+        // --- Event-Based RPM Calculation (3 Triggers) ---
+        if (edge_trigger_count >= 3) {
+            float elapsed_seconds = (float)total_elapsed_ticks / TIMER_FREQ;
+            
+            // We count the time *between* edges, so 3 edges = 2 full intervals
+            current_rpm = (2.0 / (float)PROPELLER_BLADES) * (60.0 / elapsed_seconds);
+            
+            // Reset for the next 3 events
+            edge_trigger_count = 0;
+            total_elapsed_ticks = 0;
+            // Note: We DO NOT reset last_edge_time here, so the next interval accurately measures from the last edge.
+        }
+
+        // CP2 Requirement: Continuous Status Display
         unsigned int current_time = get_current_timer();
-        if ((current_time - last_rpm_time) >= (TIMER_FREQ / 10)) { // Trigger every 0.1 seconds
-            float elapsed_seconds = (float)(current_time - last_rpm_time) / TIMER_FREQ;
-            int edges = get_and_reset_count();
+        if ((current_time - last_display_time) >= (TIMER_FREQ / 10)) { // Update display 10 times a second
             
-            // Insert latest edge count into the circular buffer
-            edge_history[history_idx] = edges;
-            history_idx = (history_idx + 1) % RPM_WINDOW;
-            
-            // Sum the historical window
-            int total_edges = 0;
-            for(int i = 0; i < RPM_WINDOW; i++) {
-                total_edges += edge_history[i];
-            }
-            
-            // Calculate RPM based on the total historical window time (5 * 0.1s = 0.5 seconds)
-            float total_window_time = elapsed_seconds * RPM_WINDOW;
-            float rpm = (total_edges / (float)PROPELLER_BLADES) * (60.0 / total_window_time);
-            
-            // Zero out residual RPM instantly if the motor is explicitly stopped
+            // Safety catch: If the motor is explicitly stopped, force RPM to 0
             if (!running || !enabled) {
-                rpm = 0.0;
-                for(int i = 0; i < RPM_WINDOW; i++) edge_history[i] = 0; // flush buffer
+                current_rpm = 0.0;
+                edge_trigger_count = 0;
+                total_elapsed_ticks = 0;
+                last_edge_time = 0;
+            } else if ((current_time - last_edge_time) > (TIMER_FREQ * 2) && last_edge_time != 0) {
+                // Stall detection: If running, but no edge seen in 2 seconds, assume stalled/jammed
+                current_rpm = 0.0;
             }
 
             // Print status bar with a carriage return to overwrite the line
@@ -210,10 +215,10 @@ int main() {
                 (running && enabled) ? "RUNNING" : "STOPPED",
                 direction ? "CW" : "CCW",
                 steps_per_sec,
-                rpm);
+                current_rpm);
             fflush(stdout); // Force print to console immediately
             
-            last_rpm_time = current_time;
+            last_display_time = current_time;
         }
 
         if (running && enabled) {
