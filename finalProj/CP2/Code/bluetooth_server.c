@@ -60,6 +60,11 @@ int send_message(int socket_fd, const char *message)
  * Recognize the commands received from MIT App Inventor.
  * CP2: print the commands only; do not operate the motor.
  */
+
+/*
+ * Recognize commands received from MIT App Inventor.
+ * CP2: acknowledge commands without controlling the motor.
+ */
 int process_command(int client_fd, const char *command)
 {
     char response[160];
@@ -70,16 +75,37 @@ int process_command(int client_fd, const char *command)
     if (strcmp(command, "START") == 0 ||
         strcmp(command, "STOP") == 0 ||
         strcmp(command, "DIR:CW") == 0 ||
-        strcmp(command, "DIR:CCW") == 0) {
+        strcmp(command, "DIR:CCW") == 0 ||
+        strcmp(command, "FASTER") == 0 ||
+        strcmp(command, "SLOWER") == 0 ||
+        strcmp(command, "CALIBRATE_ZERO") == 0 ||
+        strcmp(command, "SET_ZERO") == 0 ||
+        strcmp(command, "MAINTAIN:ON") == 0 ||
+        strcmp(command, "MAINTAIN:OFF") == 0 ||
+        strcmp(command, "LOG:START") == 0 ||
+        strcmp(command, "LOG:STOP") == 0) {
 
-        snprintf(response, sizeof(response), "ACK:%s", command);
+        snprintf(response, sizeof(response),
+                 "ACK:%s", command);
+
+    } else if (strncmp(command, "RPM:", 4) == 0 ||
+               strncmp(command, "ANGLE:", 6) == 0) {
+
+        // CP2: Accept formatted commands without applying them.
+        snprintf(response, sizeof(response),
+                 "ACK:%s", command);
+
     } else {
-        snprintf(response, sizeof(response), "ERR:UNKNOWN_COMMAND");
+        snprintf(response, sizeof(response),
+                 "ERR:UNKNOWN_COMMAND");
     }
 
     printf("Sending: %s\n", response);
+    fflush(stdout);
+
     return send_message(client_fd, response);
 }
+
 
 /*
  * Read the Bluetooth byte stream and assemble commands
