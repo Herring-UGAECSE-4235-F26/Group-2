@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -29,6 +28,11 @@ extern volatile unsigned int *gpio_mem_ptr;
 
 volatile int run_program = 1;
 
+// Global variables for edge timing
+volatile unsigned int last_edge_time = 0;
+volatile unsigned int total_elapsed_ticks = 0;
+volatile int edge_trigger_count = 0;
+
 void handle_sigint(int sig) {
     run_program = 0;
 }
@@ -44,12 +48,20 @@ void* ir_polling_thread(void* arg) {
         
         // Detect falling edge: beam was unbroken (1), now broken (0)
         if (last_state == 1 && current_state == 0) {
-            increment_edge_count(); // Trigger Assembly Counter
+            unsigned int current_time = get_current_timer();
+            
+            // If this isn't the very first edge, calculate time since last edge
+            if (last_edge_time != 0) {
+                total_elapsed_ticks += (current_time - last_edge_time);
+            }
+            
+            last_edge_time = current_time;
+            edge_trigger_count++;
+            
+            increment_edge_count(); // Keep assembly counter synced for redundancy
         }
         
         last_state = current_state;
-        
-        // Sleep 1 millisecond (1000 Hz sampling rate) to prevent 100% CPU usage
         usleep(1000); 
     }
     return NULL;
@@ -87,12 +99,12 @@ int main() {
     int enabled = 0;        
     float steps_per_sec = 100.0; 
     
-    unsigned int last_rpm_time = get_current_timer();
-    get_and_reset_count(); 
+    unsigned int last_display_time = get_current_timer();
+    float current_rpm = 0.0;
 
     printf("PARMCO Motor Controller CP2 Initialized.\n");
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); 
-    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [R]ead RPM, [Q]uit\n");
+    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n\n");
 
     E4235_KYBdeblock(1); 
     char key = 0;
@@ -100,6 +112,9 @@ int main() {
     while (run_program) {
         while (read(STDIN_FILENO, &key, 1) > 0) {
             if (key == '\n' || key == '\r') continue;
+
+            // Clear the continuous status line before printing new terminal output
+            printf("\r                                                                                \r");
 
             switch (key) {
                 case 'e':
@@ -113,32 +128,27 @@ int main() {
                     }
                     printf("Motor %s.\n", enabled ? "ENABLED" : "DISABLED");
                     break;
-
                 case 'c':
                 case 'C': 
                     direction = !direction;
                     printf("Direction: %s\n", direction ? "Clockwise" : "Counterclockwise");
                     break;
-
                 case 's':
                 case 'S': 
                     running = !running;
                     printf("Motor %s in %s mode.\n", running ? "RUNNING" : "STOPPED", mode == 0 ? "Full Step" : "Half Step");
                     break;
-
                 case 'u':
                 case 'U': 
                     steps_per_sec *= 1.02; 
                     printf("Speed increased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
-
                 case 'd':
                 case 'D': 
                     steps_per_sec *= 0.98; 
                     if (steps_per_sec < 10.0) steps_per_sec = 10.0; 
                     printf("Speed decreased. Current rate: %.2f steps/sec (%s)\n", steps_per_sec, mode == 0 ? "Full Step" : "Half Step");
                     break;
-
                 case ' ': 
                     if (enabled) {
                         printf("Executing slow constant-speed revolution...\n");
@@ -154,60 +164,61 @@ int main() {
                         printf("Cannot step: Motor is disabled.\n");
                     }
                     break;
-
                 case 't':
                 case 'T': 
                     running = 0; 
                     if (enabled) {
                         step_routine(direction, mode, motor_pins); 
-                        printf("\nAssembly step executed.\n");
+                        printf("Assembly step executed.\n");
                     } else {
-                        printf("\nCannot step: Motor is currently DISABLED and will not move.\n");
+                        printf("Cannot step: Motor is currently DISABLED and will not move.\n");
                     }
                     break;
-
-                case 'r':
-                case 'R': {
-                    unsigned int current_time = get_current_timer();
-                    unsigned int elapsed_ticks = current_time - last_rpm_time;
-                    float elapsed_seconds = (float)elapsed_ticks / TIMER_FREQ;
-
-                    // Read and reset the IR sensor edge counter
-                    int edges = get_and_reset_count();
-
-                    // CP1 calculation: RPM based on commanded motor step rate
-                    int steps_per_revolution = (mode == 0) ? 200 : 400;
-                    float calculated_rpm = (steps_per_sec * 60.0f) / steps_per_revolution;
-
-                    // CP2 calculation: actual RPM based on IR sensor readings
-                    float actual_rpm = 0.0f;
-
-                    if (elapsed_seconds > 0.0f) {
-                        actual_rpm = (edges / (float)PROPELLER_BLADES)
-                                     * (60.0f / elapsed_seconds);
-                    }
-
-                    // Display both RPM values for comparison
-                    printf("\n--- RPM Check ---\n");
-                    printf("Step Mode: %s\n",
-                           mode == 0 ? "Full Step" : "Half Step");
-                    printf("Commanded Step Rate: %.2f steps/sec\n", steps_per_sec);
-                    printf("Calculated RPM (CP1 Method): %.2f RPM\n", calculated_rpm);
-                    printf("Measured RPM (IR Sensor): %.2f RPM\n", actual_rpm);
-                    printf("Edges detected: %d\n", edges);
-                    printf("Elapsed time: %.3f sec\n", elapsed_seconds);
-                    printf("-----------------\n");
-
-                    last_rpm_time = current_time;
-                    break;
-                }
-
                 case 'q':
                 case 'Q': 
                     run_program = 0;
                     break;
             }
             key = 0;
+        }
+
+        // --- Event-Based RPM Calculation (3 Triggers) ---
+        if (edge_trigger_count >= 3) {
+            float elapsed_seconds = (float)total_elapsed_ticks / TIMER_FREQ;
+            
+            // We count the time *between* edges, so 3 edges = 2 full intervals
+            current_rpm = (2.0 / (float)PROPELLER_BLADES) * (60.0 / elapsed_seconds);
+            
+            // Reset for the next 3 events
+            edge_trigger_count = 0;
+            total_elapsed_ticks = 0;
+            // Note: We DO NOT reset last_edge_time here, so the next interval accurately measures from the last edge.
+        }
+
+        // CP2 Requirement: Continuous Status Display
+        unsigned int current_time = get_current_timer();
+        if ((current_time - last_display_time) >= (TIMER_FREQ / 10)) { // Update display 10 times a second
+            
+            // Safety catch: If the motor is explicitly stopped, force RPM to 0
+            if (!running || !enabled) {
+                current_rpm = 0.0;
+                edge_trigger_count = 0;
+                total_elapsed_ticks = 0;
+                last_edge_time = 0;
+            } else if ((current_time - last_edge_time) > (TIMER_FREQ * 2) && last_edge_time != 0) {
+                // Stall detection: If running, but no edge seen in 2 seconds, assume stalled/jammed
+                current_rpm = 0.0;
+            }
+
+            // Print status bar with a carriage return to overwrite the line
+            printf("\r[STATUS] Motor: %-7s | Dir: %-3s | Target: %5.1f steps/s | RPM: %6.2f    ", 
+                (running && enabled) ? "RUNNING" : "STOPPED",
+                direction ? "CW" : "CCW",
+                steps_per_sec,
+                current_rpm);
+            fflush(stdout); // Force print to console immediately
+            
+            last_display_time = current_time;
         }
 
         if (running && enabled) {
@@ -219,6 +230,8 @@ int main() {
         }
     }
 
+    // Clear status bar on exit
+    printf("\r                                                                                \r");
     enable_routine(PIN_ENABLE, 0); 
     E4235_Select(PIN_ENABLE, 0); 
     for (int i = 0; i < 4; i++) {
@@ -228,6 +241,6 @@ int main() {
     
     E4235_KYBdeblock(0); 
     pthread_join(ir_thread, NULL); 
-    printf("\nExiting PARMCO safely.\n");
+    printf("Exiting PARMCO safely.\n");
     return 0;
 }
