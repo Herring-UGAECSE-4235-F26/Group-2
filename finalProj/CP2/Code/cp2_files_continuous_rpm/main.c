@@ -89,8 +89,8 @@ int main() {
     unsigned int last_rpm_time = get_current_timer();
     get_and_reset_count(); 
 
-    // Moving average variables to smooth out RPM jitter at low speeds
-    #define RPM_WINDOW 4
+    // Moving average variables to smooth out RPM jitter
+    #define RPM_WINDOW 5
     int edge_history[RPM_WINDOW] = {0};
     int history_idx = 0;
 
@@ -181,7 +181,7 @@ int main() {
 
         // CP2 Requirement: Continuous Status Display with Moving Average
         unsigned int current_time = get_current_timer();
-        if ((current_time - last_rpm_time) >= (TIMER_FREQ / 2)) { // Trigger every 0.5 seconds
+        if ((current_time - last_rpm_time) >= (TIMER_FREQ / 10)) { // Trigger every 0.1 seconds
             float elapsed_seconds = (float)(current_time - last_rpm_time) / TIMER_FREQ;
             int edges = get_and_reset_count();
             
@@ -195,7 +195,7 @@ int main() {
                 total_edges += edge_history[i];
             }
             
-            // Calculate RPM based on the total historical window time (4 * 0.5s = 2.0 seconds)
+            // Calculate RPM based on the total historical window time (5 * 0.1s = 0.5 seconds)
             float total_window_time = elapsed_seconds * RPM_WINDOW;
             float rpm = (total_edges / (float)PROPELLER_BLADES) * (60.0 / total_window_time);
             
