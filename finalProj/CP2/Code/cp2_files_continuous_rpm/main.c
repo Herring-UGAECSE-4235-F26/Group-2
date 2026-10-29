@@ -91,8 +91,7 @@ int main() {
 
     printf("PARMCO Motor Controller CP2 Initialized.\n");
     printf("Step Mode: %s\n", mode == 0 ? "Full Step (200/rev)" : "Half Step (400/rev)"); 
-    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n
-");
+    printf("Controls: [E]nable, [C]irection, [Space] One rev, [S]tart/Stop, [U] Faster, [D] Slower, [T]est Step, [Q]uit\n");
 
     E4235_KYBdeblock(1); 
     char key = 0;
