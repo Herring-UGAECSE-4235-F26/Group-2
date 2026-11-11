@@ -363,6 +363,18 @@ static void device_props_changed(GDBusConnection *c, const gchar *sender, const 
     g_variant_unref(invalidated);
 }
 
+/* Periodically re-claim the default pairing agent (another agent, such as the
+   desktop Bluetooth applet, may have taken it). */
+static gboolean reclaim_agent(gpointer unused)
+{
+    (void)unused;
+    if (bus)
+        g_dbus_connection_call(bus, BLUEZ, "/org/bluez", "org.bluez.AgentManager1",
+                               "RequestDefaultAgent", g_variant_new("(o)", AGENT_PATH),
+                               NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+    return G_SOURCE_CONTINUE;
+}
+
 /* ------------------------------------------------------------ registration */
 
 static void register_done(GObject *src, GAsyncResult *res, gpointer what)
@@ -458,6 +470,12 @@ static void *ble_thread_main(void *arg)
                            NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, register_done,
                            "LE advertisement");
 
+    {
+        GSource *src = g_timeout_source_new_seconds(3);
+        g_source_set_callback(src, reclaim_agent, NULL, NULL);
+        g_source_attach(src, ctx);
+        g_source_unref(src);
+    }
     printf("[BLE] advertising as \"%s\"\n", LOCAL_NAME);
     fflush(stdout);
     g_main_loop_run(loop);
