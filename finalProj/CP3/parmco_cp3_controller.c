@@ -40,6 +40,8 @@ static int mode = 0;            /* 0=full-step, 1=half-step */
 static float steps_per_sec = 200.0f * 20.0f / 60.0f;
 static unsigned int timer_freq = 54000000U;
 static int server_fd = -1;
+static pthread_mutex_t ir_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static unsigned int ir_edges = 0;
 static float latest_ir_rpm = 0.0f;
 
