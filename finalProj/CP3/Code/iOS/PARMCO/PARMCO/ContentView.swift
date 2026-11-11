@@ -499,3 +499,10 @@ struct AngleDial: View {
         .overlay(alignment: .top) { Text("0°").font(.caption2).offset(y: 14) }
     }
 }
+
+// MARK: - Xcode canvas preview (demo mode: no Bluetooth needed)
+
+#Preview("Controller") {
+    ContentView()
+        .environmentObject(PARMCOLink(demo: true))
+}

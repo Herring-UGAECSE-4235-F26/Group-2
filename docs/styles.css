@@ -39,8 +39,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Links: bold grey, no underline; darken to black on hover */
-a { color: var(--text-2); font-weight: 700; text-decoration: none; }
+/* Links: bold Bulldog Red, no underline; darken to black on hover */
+a { color: var(--bulldog-red); font-weight: 700; text-decoration: none; }
 a:hover { color: var(--arch-black); }
 :focus-visible { outline: 2px solid var(--bulldog-red); outline-offset: 3px; }
 
@@ -133,7 +133,7 @@ main {
   font-weight: 500;
 }
 .section-nav a { color: var(--arch-black); font-weight: 500; }
-.section-nav a:hover { color: var(--text-2); }
+.section-nav a:hover { color: var(--bulldog-red); }
 
 .section { padding: clamp(3rem, 7vw, 5rem) 0; scroll-margin-top: calc(var(--head-min) + 1rem); }
 .section + .section { border-top: 1px solid var(--rule); }

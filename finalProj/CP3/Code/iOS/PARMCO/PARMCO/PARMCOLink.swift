@@ -68,15 +68,23 @@ final class PARMCOLink: NSObject, ObservableObject {
     @Published private(set) var lastEvent: String?
     @Published private(set) var rememberedName: String?
 
-    private var central: CBCentralManager!
+    private var central: CBCentralManager?
+    /// Demo mode: no Bluetooth, fake "connected" state with sample readings.
+    /// Used by the Xcode canvas preview and the iOS Simulator only.
+    let isDemo: Bool
     private var pi: CBPeripheral?
     private var rx: CBCharacteristic?
     private var rxBuffer = ""
     private var userDisconnected = false
 
-    override init() {
+    init(demo: Bool = false) {
+        isDemo = demo
         super.init()
-        central = CBCentralManager(delegate: self, queue: .main)
+        if demo {
+            loadDemoState()
+        } else {
+            central = CBCentralManager(delegate: self, queue: .main)
+        }
     }
 
     var isConnected: Bool { state == .connected }
@@ -84,24 +92,26 @@ final class PARMCOLink: NSObject, ObservableObject {
     // MARK: - Public actions
 
     func startScan() {
-        guard central.state == .poweredOn else { return }
+        if isDemo { loadDemoState(); return }      // "reconnect" instantly in demo mode
+        guard let central, central.state == .poweredOn else { return }
         discovered.removeAll()
         state = .scanning
         central.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
     }
 
     func connect(_ item: DiscoveredPi) {
-        central.stopScan()
+        central?.stopScan()
         userDisconnected = false
         pi = item.peripheral
         pi?.delegate = self
         state = .connecting
-        central.connect(item.peripheral, options: nil)
+        central?.connect(item.peripheral, options: nil)
     }
 
     func disconnect() {
         userDisconnected = true
-        if let p = pi { central.cancelPeripheralConnection(p) }
+        if isDemo { state = .idle; return }
+        if let p = pi { central?.cancelPeripheralConnection(p) }
     }
 
     /// Forget the remembered RP4 (for the forget / re-pair demonstration).
@@ -114,6 +124,10 @@ final class PARMCOLink: NSObject, ObservableObject {
     }
 
     func send(_ command: String) {
+        if isDemo {
+            demoHandle(command)
+            return
+        }
         guard let p = pi, let c = rx, state == .connected else {
             lastError = "Not connected"
             return
@@ -131,6 +145,62 @@ final class PARMCOLink: NSObject, ObservableObject {
     func optimistic(_ change: (inout Telemetry) -> Void) { change(&telemetry) }
 
     func reportLocal(error: String) { lastError = error }
+
+    // MARK: - Demo mode (preview / Simulator only)
+
+    private func loadDemoState() {
+        state = .connected
+        rememberedName = "PARMCO (demo)"
+        var t = Telemetry()
+        t.irRPM = 19.8
+        t.encRPM = 20.1
+        t.angle = 90.0
+        t.encoderOK = true
+        t.calibrated = true
+        t.desiredRPM = 20
+        t.activity = "IDLE"
+        telemetry = t
+        console = ["Demo mode: no Bluetooth, sample readings",
+                   "← PARMCO:CONNECTED",
+                   "← ACK:CALIBRATE_ZERO",
+                   "← EVT:MOVE_DONE:target=90.00;angle=90.02;err=-0.02"]
+        lastEvent = "EVT:MOVE_DONE:target=90.00;angle=90.02;err=-0.02"
+    }
+
+    /// Rough local imitation of the RP4's replies so the UI can be clicked through.
+    private func demoHandle(_ command: String) {
+        log("→ \(command)")
+        var t = telemetry
+        switch command {
+        case "START":
+            t.running = true; t.coilsOn = true; t.activity = "RUN"
+            t.irRPM = t.desiredRPM; t.encRPM = t.desiredRPM
+        case "STOP":
+            t.running = false; t.coilsOn = false; t.activity = "IDLE"
+            t.irRPM = 0; t.encRPM = 0; t.unlock = false
+        case "DIR:CW": t.clockwise = true
+        case "DIR:CCW": t.clockwise = false
+        case "FASTER": t.desiredRPM = min(t.unlock ? 400 : 100, t.desiredRPM * 1.05)
+        case "SLOWER": t.desiredRPM = max(10, t.desiredRPM / 1.05)
+        case "MODE:MAINTAIN": t.maintain = true
+        case "MODE:MANUAL": t.maintain = false
+        case "UNLOCK:ON": t.unlock = true
+        case "UNLOCK:OFF": t.unlock = false
+        case "HOLD:ON": t.hold = true
+        case "HOLD:OFF": t.hold = false
+        case "CALIBRATE_ZERO": t.calibrated = true; t.angle = 0
+        case "SET_ZERO": t.angle = 0
+        case "LOG:STOP": t.logging = false; t.logFile = ""; t.logSeconds = 0
+        default:
+            if command.hasPrefix("RPM:"), let v = Double(command.dropFirst(4)) { t.desiredRPM = v }
+            if command.hasPrefix("ANGLE:"), let v = Double(command.dropFirst(6)) { t.angle = v }
+            if command.hasPrefix("LOG:START") {
+                t.logging = true; t.logSeconds = 12; t.logFile = "log_2026-11-11_13-30-00.csv"
+            }
+        }
+        telemetry = t
+        log("← ACK (demo)")
+    }
 
     // MARK: - Incoming lines
 
