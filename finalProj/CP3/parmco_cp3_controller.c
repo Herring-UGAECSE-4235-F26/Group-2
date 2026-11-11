@@ -11,6 +11,7 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 #include "E4235.h"
+#include <time.h>
 
 extern void enable_routine(int pin, int state);
 extern void step_routine(int direction, int mode, int *pins);
@@ -39,6 +40,9 @@ static int mode = 0;            /* 0=full-step, 1=half-step */
 static float steps_per_sec = 200.0f * 20.0f / 60.0f;
 static unsigned int timer_freq = 54000000U;
 static int server_fd = -1;
+static unsigned int ir_edges = 0;
+static float latest_ir_rpm = 0.0f;
+
 
 static void handle_signal(int sig) { (void)sig; run_program = 0; }
 
@@ -60,6 +64,14 @@ static int send_message(int fd, const char *message) {
     }
     return 0;
 }
+
+//returns elapsed time using a monotonic clock
+static double monotonic_seconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_spec + (double)ts.tv_nsec/1000000000.0
+}
+
 
 static int process_command(int fd, const char *cmd) {
     char response[160];

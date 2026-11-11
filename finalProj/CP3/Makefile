@@ -1,7 +1,7 @@
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -g
-LDFLAGS = -lE4235 -pthread
+LDFLAGS = -lE4235 -pthread -lbluetooth
 
 # Target executable name
 TARGET = parmco_cp3
