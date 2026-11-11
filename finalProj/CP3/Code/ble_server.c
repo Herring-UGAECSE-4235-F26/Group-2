@@ -331,7 +331,16 @@ static void device_props_changed(GDBusConnection *c, const gchar *sender, const 
     gboolean connected = TRUE;
 
     g_variant_get(params, "(&s@a{sv}@as)", &changed_iface, &changed, &invalidated);
-    gboolean paired = FALSE;
+    gboolean paired = FALSE, now_connected = FALSE;
+    /* Another pairing agent (e.g. the desktop's Bluetooth applet) can take the
+       default-agent role and pop up a confirm dialog nobody answers, which makes
+       pairing fail ("Numeric comparison failed"). Re-claim it on every connect. */
+    if (!g_strcmp0(changed_iface, "org.bluez.Device1") &&
+        g_variant_lookup(changed, "Connected", "b", &now_connected) && now_connected) {
+        g_dbus_connection_call(bus, BLUEZ, "/org/bluez", "org.bluez.AgentManager1",
+                               "RequestDefaultAgent", g_variant_new("(o)", AGENT_PATH),
+                               NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+    }
     if (!g_strcmp0(changed_iface, "org.bluez.Device1") &&
         g_variant_lookup(changed, "Paired", "b", &paired) && paired) {
         printf("[BLE] device paired: %s (trusted)\n", path);
