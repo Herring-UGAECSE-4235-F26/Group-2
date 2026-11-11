@@ -11,6 +11,7 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 #include "E4235.h"
+#include <time.h>
 
 extern void enable_routine(int pin, int state);
 extern void step_routine(int direction, int mode, int *pins);
@@ -39,6 +40,8 @@ static int mode = 0;            /* 0=full-step, 1=half-step */
 static float steps_per_sec = 200.0f * 20.0f / 60.0f;
 static unsigned int timer_freq = 54000000U;
 static int server_fd = -1;
+static unsigned int ir_edges = 0;
+static float latest_ir_rpm = 0.0f;
 
 static void handle_signal(int sig) { (void)sig; run_program = 0; }
 
@@ -61,7 +64,46 @@ static int send_message(int fd, const char *message) {
     return 0;
 }
 
-static int process_command(int fd, const char *cmd) {
+// Returns elapsed time using a monotonic clock
+static double monotonic_seconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (double)ts.tv_sec +
+           (double)ts.tv_nsec / 1000000000.0;
+}
+
+// Calculates IR RPM from the number of detected edges
+static float sample_ir_rpm(double elapsed) {
+    pthread_mutex_lock(&ir_lock);
+
+    unsigned int count = ir_edges;
+    ir_edges = 0;
+
+    pthread_mutex_unlock(&ir_lock);
+
+    float rpm = 0.0f;
+
+    if (elapsed > 0.0) {
+        rpm = (float)(
+            count * 60.0 /
+            (PROPELLER_BLADES * elapsed)
+        );
+    }
+
+    pthread_mutex_lock(&state_lock);
+    latest_ir_rpm = rpm;
+    pthread_mutex_unlock(&state_lock);
+
+    return rpm;
+}
+
+static int process_command(
+    int fd,
+    const char *cmd,
+    FILE **log_file,
+    double *log_start
+) {
     char response[160];
     int valid = 1;
     printf("Received: %s\n", cmd);
@@ -98,7 +140,88 @@ static int process_command(int fd, const char *cmd) {
                !strcmp(cmd, "LOG:STOP")) {
         snprintf(response, sizeof(response), "ERR:NOT_IMPLEMENTED");
         valid = 0;
+    } else if (!strcmp(cmd, "LOG:START")) {
+
+    if (*log_file != NULL) {
+        snprintf(response, sizeof(response),
+                 "ERR:LOG_ALREADY_RUNNING");
     } else {
+        time_t now = time(NULL);
+        struct tm tm_now;
+        char filename[80];
+
+        localtime_r(&now, &tm_now);
+
+        strftime(filename, sizeof(filename),
+                 "parmco_log_%Y%m%d_%H%M%S.csv",
+                 &tm_now);
+
+        *log_file = fopen(filename, "w");
+
+        if (*log_file == NULL) {
+            snprintf(response, sizeof(response),
+                     "ERR:LOG_OPEN_FAILED");
+        } else {
+            fprintf(*log_file,
+                    "elapsed_s,commanded_rpm,ir_rpm,running,direction\n");
+
+            fflush(*log_file);
+
+            *log_start = monotonic_seconds();
+
+            snprintf(response, sizeof(response),
+                     "LOG:STARTED:%s", filename);
+        }
+    }
+
+    valid = 0;
+} else if (!strcmp(cmd, "LOG:STOP")) {
+
+    if (*log_file == NULL) {
+        snprintf(response, sizeof(response),
+                 "ERR:LOG_NOT_RUNNING");
+    } else {
+        fclose(*log_file);
+        *log_file = NULL;
+
+        snprintf(response, sizeof(response),
+                 "ACK:LOG:STOP");
+    }
+
+    valid = 0;
+} else if (!strcmp(cmd, "STATUS")) {
+
+    float rpm = steps_per_sec * 60.0f /
+                (mode ? 400.0f : 200.0f);
+
+    snprintf(response, sizeof(response),
+             "STATUS:%s:%s:%.2f:%.2f:%s",
+             running ? "RUNNING" : "STOPPED",
+             direction ? "CW" : "CCW",
+             rpm,
+             latest_ir_rpm,
+             *log_file ? "LOGGING" : "NOT_LOGGING");
+
+    valid = 0;
+}
+else if (!strcmp(cmd, "CALIBRATE_ZERO") ||
+         !strcmp(cmd, "SET_ZERO") ||
+         !strncmp(cmd, "ANGLE:", 6)) {
+
+    snprintf(response, sizeof(response),
+             "ERR:ENCODER_UNAVAILABLE");
+
+    valid = 0;
+}
+else if (!strcmp(cmd, "MAINTAIN:ON") ||
+         !strcmp(cmd, "MAINTAIN:OFF")) {
+
+    snprintf(response, sizeof(response),
+             "ERR:MAINTAIN_UNAVAILABLE");
+
+    valid = 0;
+}
+else {
         snprintf(response, sizeof(response), "ERR:UNKNOWN_COMMAND");
         valid = 0;
     }
@@ -109,37 +232,132 @@ static int process_command(int fd, const char *cmd) {
     return send_message(fd, response);
 }
 
+
 static void handle_client(int fd) {
     char command[MAX_COMMAND];
     char buffer[256];
+
     size_t position = 0;
     int overflow = 0;
+
+    FILE *log_file = NULL;
+    double log_start = 0.0;
+    double last_sample = monotonic_seconds();
+
     while (run_program) {
         fd_set rfds;
         FD_ZERO(&rfds);
         FD_SET(fd, &rfds);
-        struct timeval timeout = { .tv_sec = 0, .tv_usec = 200000 };
-        int ready = select(fd + 1, &rfds, NULL, NULL, &timeout);
-        if (ready == 0 || (ready < 0 && errno == EINTR)) continue;
-        if (ready < 0) break;
-        ssize_t received = recv(fd, buffer, sizeof(buffer), 0);
-        if (received <= 0) break;
-        for (ssize_t i = 0; i < received; ++i) {
-            char c = buffer[i];
-            if (c == '\n') {
-                if (overflow) {
-                    if (send_message(fd, "ERR:COMMAND_TOO_LONG") < 0) return;
-                } else if (position) {
-                    command[position] = '\0';
-                    if (process_command(fd, command) < 0) return;
-                }
-                position = 0;
-                overflow = 0;
-            } else if (c != '\r' && !overflow) {
-                if (position < sizeof(command) - 1) command[position++] = c;
-                else overflow = 1;
+
+        struct timeval timeout = {
+            .tv_sec = 0,
+            .tv_usec = 200000
+        };
+
+        int ready = select(
+            fd + 1, &rfds, NULL, NULL, &timeout
+        );
+
+        double now = monotonic_seconds();
+
+        // Send measured RPM approximately once per second
+        if (now - last_sample >= 1.0) {
+            float measured = sample_ir_rpm(
+                now - last_sample
+            );
+
+            last_sample = now;
+
+            pthread_mutex_lock(&state_lock);
+
+            float commanded =
+                steps_per_sec * 60.0f /
+                (mode ? 400.0f : 200.0f);
+
+            int active = running;
+            int dir = direction;
+
+            pthread_mutex_unlock(&state_lock);
+
+            char telemetry[128];
+
+            snprintf(telemetry, sizeof(telemetry),
+                     "RPM_ACTUAL:%.2f", measured);
+
+            if (send_message(fd, telemetry) < 0) {
+                break;
+            }
+
+            // Save one row per second when logging
+            if (log_file != NULL) {
+                fprintf(log_file,
+                        "%.2f,%.2f,%.2f,%d,%s\n",
+                        now - log_start,
+                        commanded,
+                        measured,
+                        active,
+                        dir ? "CW" : "CCW");
+
+                fflush(log_file);
             }
         }
+
+        if (ready == 0 ||
+            (ready < 0 && errno == EINTR)) {
+            continue;
+        }
+
+        if (ready < 0) {
+            break;
+        }
+
+        ssize_t received = recv(
+            fd, buffer, sizeof(buffer), 0
+        );
+
+        if (received <= 0) {
+            break;
+        }
+
+        for (ssize_t i = 0; i < received; i++) {
+            char c = buffer[i];
+
+            if (c == '\n') {
+                if (overflow) {
+                    if (send_message(
+                        fd, "ERR:COMMAND_TOO_LONG"
+                    ) < 0) {
+                        goto client_cleanup;
+                    }
+                } else if (position > 0) {
+                    command[position] = '\0';
+
+                    if (process_command(
+                        fd,
+                        command,
+                        &log_file,
+                        &log_start
+                    ) < 0) {
+                        goto client_cleanup;
+                    }
+                }
+
+                position = 0;
+                overflow = 0;
+
+            } else if (c != '\r' && !overflow) {
+                if (position < sizeof(command) - 1) {
+                    command[position++] = c;
+                } else {
+                    overflow = 1;
+                }
+            }
+        }
+    }
+
+client_cleanup:
+    if (log_file != NULL) {
+        fclose(log_file);
     }
 }
 
@@ -189,7 +407,11 @@ static void *ir_polling_thread(void *arg) {
     int last_state = 1;
     while (run_program) {
         int current = (gpio_mem_ptr[13] & (1U << PIN_IR_SENSOR)) ? 1 : 0;
-        if (last_state == 1 && current == 0) increment_edge_count();
+        if (last_state == 1 && current == 0) {
+            pthread_mutex_lock(&ir_lock);
+            ++ir_edges;
+            pthread_mutex_unlock(&ir_lock);
+        }
         last_state = current;
         usleep(1000);
     }
