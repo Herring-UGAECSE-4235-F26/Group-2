@@ -7,171 +7,79 @@
 <meta name="description" content="[Site description]">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Merriweather+Sans:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="script.js" defer></script>
 </head>
 <!--
-  PARMCO project site skeleton - AI-generated (Claude).
-  Replace each [placeholder] with real material. Human changes must be wrapped
-  in a visible marker: [HUMAN EDIT] ... [END HUMAN EDIT], with the AI original
-  kept in git history.
+  PARMCO project site. AI-generated (Claude) as the main author.
+  Human changes: wrap in a visible marker  [HUMAN EDIT] ... [END HUMAN EDIT]
+  and keep the AI original in git history.
 -->
 <body>
-<a class="skip" href="#overview">Skip to content</a>
+<a class="skip" href="#content">Skip to content</a>
 
-<!-- ============================== TITLE ============================== -->
-<header class="hero">
-  <div class="wrap hero-grid">
-    <div class="hero-text">
+<!-- Masthead: large at the top of the page, condenses into a bar on scroll -->
+<header class="masthead" id="masthead">
+  <div class="masthead-inner">
+    <div class="title-block">
       <p class="course">[Course · Group · Term]</p>
-      <h1>PARMCO</h1>
-      <p class="lede ph-text">[One-sentence project tagline]</p>
-      <nav class="hero-nav" aria-label="Sections">
-        <a href="#overview">Overview</a>
-        <a href="#targets">Design targets</a>
-        <a href="#checkpoints">Checkpoints</a>
-      </nav>
+      <h1 class="title">PARMCO</h1>
+      <p class="tagline">[One-sentence project tagline]</p>
     </div>
-    <figure class="hero-figure ph-box" aria-label="Placeholder for hero image">
-      <span>[Hero image: photo of the rig or system graphic]</span>
-    </figure>
+
+    <!-- Propeller: rotates clockwise from 0° at the top of the page to 360° at the bottom -->
+    <div class="dial-wrap">
+      <svg class="dial" viewBox="0 0 200 200" role="img" aria-label="Propeller dial that turns as you scroll">
+        <circle class="dial-face" cx="100" cy="100" r="92"/>
+        <g class="dial-ticks">
+          <line x1="100" y1="8"   x2="100" y2="24"/>   <!-- 0° -->
+          <line x1="192" y1="100" x2="176" y2="100"/>  <!-- 90° -->
+          <line x1="100" y1="192" x2="100" y2="176"/>  <!-- 180° -->
+        </g>
+        <g class="dial-labels">
+          <text x="110" y="24">0°</text>
+          <text x="170" y="90" text-anchor="middle">90°</text>
+          <text x="110" y="186">180°</text>
+        </g>
+        <g class="propeller" id="propeller">
+          <path class="blade-red"   d="M100 100 L95 52 Q100 30 105 52 Z"/>
+          <path class="blade-black" d="M100 100 L95 148 Q100 170 105 148 Z"/>
+          <circle class="hub" cx="100" cy="100" r="9"/>
+          <circle class="hub-cap" cx="100" cy="100" r="3.5"/>
+        </g>
+      </svg>
+    </div>
   </div>
 </header>
 
-<main>
-  <!-- ============================ OVERVIEW ============================ -->
-  <section id="overview" class="section wrap">
+<main id="content">
+  <nav class="section-nav" aria-label="Sections">
+    <a href="#overview">Overview</a>
+    <a href="#targets">Design targets</a>
+    <a href="#checkpoints">Checkpoints</a>
+  </nav>
+
+  <section id="overview" class="section">
     <h2>Overview</h2>
-    <div class="overview-grid">
-      <div class="prose">
-        <p class="ph-text">[Paragraph 1: what PARMCO is and what it does]</p>
-        <p class="ph-text">[Paragraph 2: how the system works: phone, Bluetooth, RP4, motor driver, sensors]</p>
-        <p class="ph-text">[Paragraph 3: how results are verified and how AI is used in the project]</p>
-      </div>
-      <div class="ph-box overview-figure">
-        <span>[System diagram or signal chain]</span>
-      </div>
-    </div>
+    <div class="ph ph-text">[Overview content]</div>
   </section>
 
-  <!-- ========================= DESIGN TARGETS ========================= -->
-  <section id="targets" class="section wrap">
-    <div class="section-head">
-      <h2>Design targets</h2>
-      <p class="ph-text">[Short intro to the design targets]</p>
-    </div>
-
-    <!-- Target group: copy this <section> for each group of targets -->
-    <section class="tgroup">
-      <h3>[Target group 1]</h3>
-      <ul class="trows">
-        <!-- Target row: copy this <li> for each target -->
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-      </ul>
-    </section>
-
-    <section class="tgroup">
-      <h3>[Target group 2]</h3>
-      <ul class="trows">
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-      </ul>
-    </section>
-
-    <section class="tgroup">
-      <h3>[Target group 3]</h3>
-      <ul class="trows">
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-        <li class="trow">
-          <p class="tval"><span class="num">[Value]</span> <span class="unit">[unit]</span></p>
-          <div class="tbody"><h4>[Target name]</h4><p>[Description of the requirement]</p></div>
-          <p class="ttest">[Verifying test]</p>
-          <p class="tstatus" data-status="pending">[Status]</p>
-        </li>
-      </ul>
-    </section>
+  <section id="targets" class="section">
+    <h2>Design targets</h2>
+    <div class="ph ph-tall">[Design targets content]</div>
   </section>
 
-  <!-- =========================== CHECKPOINTS =========================== -->
-  <section id="checkpoints" class="section wrap">
-    <div class="section-head">
-      <h2>Checkpoints</h2>
-      <p class="ph-text">[Short intro to the project timeline]</p>
-    </div>
-    <!-- cp-done = completed, cp-current = in progress, cp-next = upcoming -->
-    <ol class="timeline">
-      <li class="cp cp-next">
-        <span class="cp-marker" aria-hidden="true">1</span>
-        <div class="cp-head"><h3>Checkpoint 1</h3><p class="cp-meta"><time>[Date]</time><span>[Weight]</span></p></div>
-        <p class="cp-desc ph-text">[Brief goals for this checkpoint]</p>
-        <p class="cp-state">[Status]</p>
-      </li>
-      <li class="cp cp-next">
-        <span class="cp-marker" aria-hidden="true">2</span>
-        <div class="cp-head"><h3>Checkpoint 2</h3><p class="cp-meta"><time>[Date]</time><span>[Weight]</span></p></div>
-        <p class="cp-desc ph-text">[Brief goals for this checkpoint]</p>
-        <p class="cp-state">[Status]</p>
-      </li>
-      <li class="cp cp-next">
-        <span class="cp-marker" aria-hidden="true">3</span>
-        <div class="cp-head"><h3>Checkpoint 3</h3><p class="cp-meta"><time>[Date]</time><span>[Weight]</span></p></div>
-        <p class="cp-desc ph-text">[Brief goals for this checkpoint]</p>
-        <p class="cp-state">[Status]</p>
-      </li>
-      <li class="cp cp-next">
-        <span class="cp-marker" aria-hidden="true">4</span>
-        <div class="cp-head"><h3>Final</h3><p class="cp-meta"><time>[Date]</time><span>[Weight]</span></p></div>
-        <p class="cp-desc ph-text">[Brief goals for the final check and report]</p>
-        <p class="cp-state">[Status]</p>
-      </li>
-    </ol>
+  <section id="checkpoints" class="section">
+    <h2>Checkpoints</h2>
+    <div class="ph ph-text">[Checkpoint timeline content]</div>
   </section>
 </main>
 
 <footer class="footer">
-  <div class="wrap footer-grid">
-    <p>[Team members]</p>
-    <p><a href="#">[Project repositories]</a></p>
-    <p>[AI authorship note]</p>
-  </div>
+  <p>[Team members]</p>
+  <p>[Project repositories]</p>
+  <p>[AI authorship note]</p>
 </footer>
 </body>
 </html>
