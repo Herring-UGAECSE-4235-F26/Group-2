@@ -7,7 +7,7 @@ LDFLAGS = -lE4235 -pthread -lbluetooth
 TARGET = parmco_cp3
 
 # Object files
-OBJS = parmco_cp3_controller.o motor_driver.o
+OBJS = parmco_cp3_controller.o motor_driver.o as5600.o
 
 # Default target
 all: $(TARGET)

@@ -1,0 +1,6 @@
+elapsed_s,commanded_rpm,ir_rpm,running,direction
+0.20,20.00,0.00,0,CW
+1.20,20.00,0.00,0,CW
+2.20,20.00,0.00,0,CW
+3.20,20.00,0.00,0,CW
+4.21,20.00,0.00,0,CW

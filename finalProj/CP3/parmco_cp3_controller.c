@@ -12,6 +12,7 @@
 #include <bluetooth/rfcomm.h>
 #include "E4235.h"
 #include <time.h>
+#include "as5600.h"
 
 extern void enable_routine(int pin, int state);
 extern void step_routine(int direction, int mode, int *pins);
@@ -21,6 +22,7 @@ extern void increment_edge_count(void);
 extern int get_and_reset_count(void);
 extern unsigned int get_current_timer(void);
 extern volatile unsigned int *gpio_mem_ptr;
+static double monotonic_seconds(void);
 
 #define PIN_ENABLE 24
 #define PIN_A 17
@@ -41,11 +43,131 @@ static float steps_per_sec = 200.0f * 20.0f / 60.0f;
 static unsigned int timer_freq = 54000000U;
 static int server_fd = -1;
 static pthread_mutex_t ir_lock = PTHREAD_MUTEX_INITIALIZER;
-
+static pthread_mutex_t encoder_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int ir_edges = 0;
 static float latest_ir_rpm = 0.0f;
+static int encoder_available = 0;
+static float encoder_zero = 0.0f;
+static float latest_encoder_angle = 0.0f;
+static float latest_encoder_rpm = 0.0f;
+static float previous_encoder_angle = 0.0f;
+static double previous_encoder_time = 0.0;
+static int encoder_rpm_initialized = 0;
 
 static void handle_signal(int sig) { (void)sig; run_program = 0; }
+
+/*
+ * read_encoder_angle:
+ * Reads the AS5600 encoder and calculates its angle
+ * relative to the current zero reference.
+ *
+ * Returns 0 on success and -1 on failure.
+ */
+static int read_encoder_angle(float *angle)
+{
+    float raw_degrees;
+
+    if (angle == NULL || !encoder_available)
+        return -1;
+
+    pthread_mutex_lock(&encoder_lock);
+
+    int result = as5600_read_degrees(&raw_degrees);
+
+    if (result != 0) {
+        pthread_mutex_unlock(&encoder_lock);
+        return -1;
+    }
+
+    float relative_angle = raw_degrees - encoder_zero;
+
+    if (relative_angle < 0.0f)
+        relative_angle += 360.0f;
+
+    if (relative_angle >= 360.0f)
+        relative_angle -= 360.0f;
+
+    latest_encoder_angle = relative_angle;
+    *angle = relative_angle;
+
+    pthread_mutex_unlock(&encoder_lock);
+
+    return 0;
+}
+
+/*
+ * update_encoder_rpm:
+ * Calculates rotational speed from consecutive AS5600 readings.
+ * Returns 0 on success and -1 if the encoder is unavailable.
+ */
+static int update_encoder_rpm(float *rpm)
+{
+    float current_angle;
+
+    if (rpm == NULL || read_encoder_angle(&current_angle) != 0)
+        return -1;
+
+    double now = monotonic_seconds();
+
+    if (!encoder_rpm_initialized) {
+        previous_encoder_angle = current_angle;
+        previous_encoder_time = now;
+        encoder_rpm_initialized = 1;
+        *rpm = 0.0f;
+        return 0;
+    }
+
+    double elapsed = now - previous_encoder_time;
+    float delta = current_angle - previous_encoder_angle;
+
+    /* Correct for crossing the 0/360-degree boundary. */
+    if (delta > 180.0f)
+        delta -= 360.0f;
+    else if (delta < -180.0f)
+        delta += 360.0f;
+
+    if (elapsed <= 0.0)
+        return -1;
+
+    float calculated_rpm =
+    (delta / 360.0f) * (60.0f / (float)elapsed);
+
+    pthread_mutex_lock(&encoder_lock);
+    latest_encoder_rpm = calculated_rpm;
+    pthread_mutex_unlock(&encoder_lock);
+
+    previous_encoder_angle = current_angle;
+    previous_encoder_time = now;
+
+    *rpm = calculated_rpm;
+    return 0;
+}
+
+/*
+ * encoder_thread:
+ * Samples the AS5600 every 10 ms to update encoder RPM.
+ */
+static void *encoder_thread(void *arg)
+{
+    (void)arg;
+
+    while (run_program) {
+        if (encoder_available) {
+            float rpm;
+
+            if (update_encoder_rpm(&rpm) != 0) {
+                pthread_mutex_lock(&state_lock);
+                encoder_rpm_initialized = 0;
+                latest_encoder_rpm = 0.0f;
+                pthread_mutex_unlock(&state_lock);
+            }
+        }
+
+        usleep(10000);
+    }
+
+    return NULL;
+}
 
 static void stop_motor(void) {
     pthread_mutex_lock(&state_lock);
@@ -199,17 +321,45 @@ static int process_command(
                 *log_file ? "LOGGING" : "NOT_LOGGING");
 
         valid = 0;
-    }
-    else if (!strcmp(cmd, "CALIBRATE_ZERO") ||
-            !strcmp(cmd, "SET_ZERO") ||
-            !strncmp(cmd, "ANGLE:", 6)) {
+    } else if (!strcmp(cmd, "CALIBRATE_ZERO") ||
+         !strcmp(cmd, "SET_ZERO")) {
 
-        snprintf(response, sizeof(response),
-                "ERR:ENCODER_UNAVAILABLE");
+        float current_angle;
 
-        valid = 0;
+        int read_result = -1;
+
+        if (encoder_available) {
+           pthread_mutex_lock(&encoder_lock);
+           read_result = as5600_read_degrees(&current_angle);
+           pthread_mutex_unlock(&encoder_lock);
+        }
+
+        if (read_result != 0) {
+
+            strcpy(response,"ERR:ENCODER_UNAVAILABLE");
+            valid = 0;
+
+        } else {
+            pthread_mutex_lock(&encoder_lock);
+
+	    encoder_zero = current_angle;
+	    latest_encoder_angle = 0.0f;
+    	    encoder_rpm_initialized = 0;
+
+	    pthread_mutex_unlock(&encoder_lock);
+
+	    if (!strcmp(cmd, "CALIBRATE_ZERO"))
+        	strcpy(response, "ACK:CALIBRATE_ZERO");
+	    else
+        	strcpy(response, "ACK:SET_ZERO");
+
+    	    valid = 0;
+	}
+    } else if (!strncmp(cmd, "ANGLE:", 6)) {
+         strcpy(response,"ERR:ANGLE_NOT_IMPLEMENTED");
+         valid = 0;
     }
-    else if (!strcmp(cmd, "MAINTAIN:ON") ||
+      else if (!strcmp(cmd, "MAINTAIN:ON") ||
             !strcmp(cmd, "MAINTAIN:OFF")) {
 
         snprintf(response, sizeof(response),
@@ -284,6 +434,32 @@ static void handle_client(int fd) {
                 break;
             }
 
+            /* Send the current encoder angle to the Android app. */
+		float encoder_angle;
+
+		if (read_encoder_angle(&encoder_angle) == 0) {
+    			char angle_message[64];
+
+    		snprintf(angle_message, sizeof(angle_message),
+             		"ANGLE_ACTUAL:%.2f", encoder_angle);
+
+    		send_message(fd, angle_message);
+		}
+	    /* Send the latest encoder RPM to the Android app. */
+           if (encoder_available) {
+    		float encoder_rpm;
+
+    		pthread_mutex_lock(&encoder_lock);
+    		encoder_rpm = latest_encoder_rpm;
+    		pthread_mutex_unlock(&encoder_lock);
+
+    		char rpm_message[64];
+
+    		snprintf(rpm_message, sizeof(rpm_message),
+             		"ENCODER_RPM:%.2f", encoder_rpm);
+
+    		send_message(fd, rpm_message);
+		}
             // Save one row per second when logging
             if (log_file != NULL) {
                 fprintf(log_file,
@@ -419,6 +595,13 @@ int main(void) {
     signal(SIGTERM, handle_signal);
     signal(SIGPIPE, SIG_IGN);
     if (E4235_Init() != 0) { fprintf(stderr, "E4235_Init failed\n"); return EXIT_FAILURE; }
+    if (as5600_init() == 0) {
+        encoder_available = 1;
+        printf("AS5600 encoder initialized successfully.\n");
+    } else {
+        encoder_available = 0;
+        printf("AS5600 encoder unavailable. Continuing without encoder.\n");
+    }
     unsigned int actual = get_timer_frequency();
     if (actual) timer_freq = actual;
     printf("ARM timer frequency: %u Hz\n", timer_freq);
@@ -432,7 +615,7 @@ int main(void) {
     E4235_Select(PIN_IR_SENSOR, 0);
     E4235_KYBdeblock(1);
 
-    pthread_t ir_thread, bt_thread;
+    pthread_t ir_thread, bt_thread, encoder_tid;
     if (pthread_create(&ir_thread, NULL, ir_polling_thread, NULL) != 0) {
         fprintf(stderr, "Cannot start IR thread\n");
         E4235_KYBdeblock(0);
@@ -445,6 +628,8 @@ int main(void) {
         E4235_KYBdeblock(0);
         return EXIT_FAILURE;
     }
+
+    pthread_create(&encoder_tid, NULL, encoder_thread, NULL);
     printf("PARMCO CP3 controller ready (20 RPM, CW, stopped).\n");
     printf("Keyboard: E enable/run toggle, S start/stop, C direction, U/D speed, R RPM, Q quit\n");
     int outputs_enabled = 0;
@@ -509,9 +694,11 @@ int main(void) {
     for (int i = 0; i < 4; ++i) E4235_Write(motor_pins[i], 0);
     pthread_join(bt_thread, NULL);
     pthread_join(ir_thread, NULL);
+    pthread_join(encoder_tid, NULL);
     E4235_KYBdeblock(0);
     for (int i = 0; i < 4; ++i) E4235_Select(motor_pins[i], 0);
     E4235_Select(PIN_ENABLE, 0);
+    as5600_close();
     printf("PARMCO stopped safely.\n");
     return EXIT_SUCCESS;
 }
