@@ -298,7 +298,7 @@ static void learn_update(int asm_dir)
 {
     if (enc_sign != 0 || !encoder_ok) return;
     learn_steps += asm_dir ? 1 : -1;
-    if (labs(learn_steps) >= 20) {
+    if (labs(learn_steps) >= 6) {
         double d = read_cum() - learn_cum0;
         double expect = fabs((double)learn_steps) * STEP_DEG;
         if (fabs(d) > 0.5 * expect) {
@@ -324,16 +324,9 @@ static void timed_step(int asm_dir, float rpm)
     unsigned int now = get_current_timer();
     int late = (int)(now - next_deadline);
     if (late > (int)period) next_deadline = now;        /* recover after a hiccup */
-    /* Sleep until ~200 us before the deadline, then let the assembly loop
-       busy-wait the rest. Spinning only briefly leaves the CPU free for the
-       kernel's Bluetooth work (long spins at RT priority dropped BLE links). */
     int wait = (int)(next_deadline - now);
-    int spin = (int)(timer_freq / 5000);                /* 200 us in ticks */
-    if (wait > spin) {
-        double sleep_ns = (double)(wait - spin) / timer_freq * 1e9;
-        struct timespec ts = { (time_t)(sleep_ns / 1e9), (long)fmod(sleep_ns, 1e9) };
-        clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
-    }
+    if (wait > (int)(timer_freq / 500))                 /* > 2 ms: sleep most of it */
+        usleep((useconds_t)((double)wait / timer_freq * 1e6) - 1000);
     step_at_deadline(next_deadline, asm_dir, STEP_MODE, motor_pins);
     next_deadline += period;
 
@@ -363,9 +356,6 @@ static int    mv_dir, mv_iter, mv_probe, mv_from_hold;
 static long   mv_left;
 static double mv_settle_until, mv_t0;
 static float  mv_probe_angle;
-static float  mv_angle_before;
-static long   mv_last_n;
-static int    mv_last_dir, mv_bad, mv_probe_tries;
 static unsigned int mv_gen;
 
 static void notify_event(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -390,9 +380,6 @@ static void start_move(float target, float rpm, int from_hold)
     mv_from_hold = from_hold;
     mv_t0 = now_s();
     mv_phase = MV_PLAN;
-    mv_last_n = 0;
-    mv_bad = 0;
-    mv_probe_tries = 0;
     pthread_mutex_lock(&state_lock);
     activity = ACT_MOVE;
     mv_gen = cmd_generation;
@@ -410,33 +397,15 @@ static int move_service(void)
             mv_probe = 1;
             mv_probe_angle = read_angle();
             mv_dir = 1;
-            mv_left = 10;
-            mv_cur = mv_probe_tries ? 12.0f : (RPM_START < mv_rpm ? RPM_START : mv_rpm);
-            mv_probe_tries++;
+            mv_left = 6;
+            mv_cur = RPM_START < mv_rpm ? RPM_START : mv_rpm;
+            learn_reset();
             mv_phase = MV_STEP;
             return 1;
         }
-        float now_angle = read_angle();
-        float err = wrap180(mv_target - now_angle);
-        if (mv_last_n > 0) {
-            float expect = (mv_last_dir ? 1.0f : -1.0f) * enc_sign * mv_last_n * STEP_DEG;
-            float moved = wrap180(now_angle - mv_angle_before);
-            printf("MOVE check: commanded %+.1f deg, encoder moved %+.1f deg\n", expect, moved);
-            if (fabsf(expect) >= 5.0f && fabsf(moved) > 0.4f * fabsf(expect) &&
-                ((moved > 0) != (expect > 0))) {
-                pthread_mutex_lock(&state_lock);
-                enc_sign = -enc_sign;
-                step_count = -step_count;
-                pthread_mutex_unlock(&state_lock);
-                printf("MOVE: encoder moved opposite to the command -> direction corrected (sign %+d)\n", enc_sign);
-            } else if (fabsf(expect) >= 5.0f && fabsf(moved) < 0.25f * fabsf(expect)) {
-                mv_bad++;
-                printf("MOVE: encoder barely moved (motor stalled or encoder not reading)\n");
-            }
-        }
+        float err = wrap180(mv_target - read_angle());
         long n = lroundf(fabsf(err) / STEP_DEG);
-        int failed = (mv_bad >= 2) || (mv_iter >= MOVE_MAX_ITER && fabsf(err) > MOVE_TOL_DEG);
-        if (n == 0 || (mv_iter > 0 && fabsf(err) <= MOVE_TOL_DEG) || mv_iter >= MOVE_MAX_ITER || failed) {
+        if (n == 0 || (mv_iter > 0 && fabsf(err) <= MOVE_TOL_DEG) || mv_iter >= MOVE_MAX_ITER) {
             /* done */
             pthread_mutex_lock(&enc_lock);
             phase_ref_idx = get_step_index();
@@ -454,8 +423,7 @@ static int move_service(void)
                 snprintf(log_event, sizeof(log_event), "hold_correction_%d", nc);
                 pthread_mutex_unlock(&log_lock);
             } else {
-                notify_event("%s:target=%.2f;angle=%.2f;err=%.2f;ms=%.0f",
-                             failed ? "EVT:MOVE_FAILED" : "EVT:MOVE_DONE",
+                notify_event("EVT:MOVE_DONE:target=%.2f;angle=%.2f;err=%.2f;ms=%.0f",
                              mv_target, read_angle(), err, dur * 1000);
             }
             int hold;
@@ -477,11 +445,6 @@ static int move_service(void)
         }
         mv_left = n;
         mv_dir = (err * enc_sign > 0) ? 1 : 0;
-        mv_angle_before = now_angle;
-        mv_last_n = n;
-        mv_last_dir = mv_dir;
-        printf("MOVE iter %d: angle %.2f err %+.2f -> %ld steps asm_dir %d (sign %+d)\n",
-               mv_iter, now_angle, err, n, mv_dir, enc_sign);
         mv_cur = RPM_START < mv_rpm ? RPM_START : mv_rpm;
         next_deadline = get_current_timer();
         mv_phase = MV_STEP;
@@ -505,24 +468,13 @@ static int move_service(void)
         if (now_s() < mv_settle_until) { usleep(2000); return 1; }
         if (mv_probe) {
             float d = wrap180(read_angle() - mv_probe_angle);
-            printf("MOVE probe: 10 steps asm_dir 1 -> encoder moved %+.2f deg\n", d);
-            if (fabsf(d) >= 7.0f) {
+            if (enc_sign == 0) {                       /* learner did not decide */
                 pthread_mutex_lock(&state_lock);
-                enc_sign = (d > 0) ? 1 : -1;
+                enc_sign = (d >= 0) ? 1 : -1;
                 if (enc_sign < 0) step_count = -step_count;
                 pthread_mutex_unlock(&state_lock);
-                printf("Learned encoder direction: asm dir 1 -> angle %s\n",
-                       enc_sign > 0 ? "increases" : "decreases");
-            } else if (mv_probe_tries >= 2) {
-                mv_probe = 0;
-                notify_event("EVT:MOVE_FAILED:encoder_not_tracking;moved=%.2f", d);
-                pthread_mutex_lock(&state_lock);
-                activity = ACT_IDLE;
-                pthread_mutex_unlock(&state_lock);
-                mv_phase = MV_PLAN;
-                return 0;
             }
-            mv_probe = 0;                              /* PLAN probes again if needed */
+            mv_probe = 0;
         } else {
             mv_iter++;                                 /* PLAN re-checks the error */
         }
@@ -575,12 +527,7 @@ static float maintain_target(float desired, float cur)
 static void *motor_thread(void *arg)
 {
     (void)arg;
-    /* Run on core 3 (core 0 services most interrupts, incl. Bluetooth UART). */
-    cpu_set_t cpus;
-    CPU_ZERO(&cpus);
-    CPU_SET(3, &cpus);
-    pthread_setaffinity_np(pthread_self(), sizeof(cpus), &cpus);
-    struct sched_param sp = { .sched_priority = 40 };
+    struct sched_param sp = { .sched_priority = 80 };
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
         printf("Note: real-time priority unavailable (run with sudo)\n");
 
@@ -714,18 +661,7 @@ static void *encoder_thread(void *arg)
         if (!encoder_ok) continue;
 
         float raw;
-        static int fails;
-        static double fail_report;
-        if (as5600_read_degrees(&raw) != 0) {
-            fails++;
-            double tf = now_s();
-            if (tf - fail_report > 1.0) {
-                printf("[ENC] %d AS5600 read errors in the last second\n", fails);
-                fails = 0;
-                fail_report = tf;
-            }
-            continue;
-        }
+        if (as5600_read_degrees(&raw) != 0) continue;
         double t = now_s();
 
         pthread_mutex_lock(&enc_lock);
@@ -1326,7 +1262,6 @@ int main(int argc, char **argv)
     while (run_program) sleep_s(0.2);
 #else
     /* Desktop simulation build only: commands from stdin. */
-    if (getenv("SIM_SIGN0")) enc_sign = atoi(getenv("SIM_SIGN0"));
     (void)ble_line; (void)ble_conn; (void)secure; (void)rfcomm_thread;
     th_rf = th_tel;
     char line[MAX_LINE];
