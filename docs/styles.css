@@ -39,8 +39,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--arch-black); text-decoration-color: var(--bulldog-red); text-underline-offset: 3px; }
-a:hover { color: var(--bulldog-red); }
+/* Links: bold grey, no underline; darken to black on hover */
+a { color: var(--text-2); font-weight: 700; text-decoration: none; }
+a:hover { color: var(--arch-black); }
 :focus-visible { outline: 2px solid var(--bulldog-red); outline-offset: 3px; }
 
 .skip { position: absolute; left: -999px; top: 0; z-index: 20; background: var(--arch-black); color: var(--white); padding: .5rem 1rem; }
@@ -131,8 +132,8 @@ main {
   font-size: 1.1rem;
   font-weight: 500;
 }
-.section-nav a { text-decoration: none; }
-.section-nav a:hover { color: var(--bulldog-red); }
+.section-nav a { color: var(--arch-black); font-weight: 500; }
+.section-nav a:hover { color: var(--text-2); }
 
 .section { padding: clamp(3rem, 7vw, 5rem) 0; scroll-margin-top: calc(var(--head-min) + 1rem); }
 .section + .section { border-top: 1px solid var(--rule); }
