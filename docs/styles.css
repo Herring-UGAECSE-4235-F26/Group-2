@@ -185,13 +185,36 @@ main {
 .ph-tall { min-height: 640px; }
 
 .footer {
-  max-width: 1200px; margin: 0 auto;
-  padding: 2rem var(--gutter) 3rem;
+  margin-top: 2rem;
+  background: var(--white);
   border-top: 3px solid var(--arch-black);
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 2rem;
-  color: var(--text-2); font-size: .92rem;
+  color: var(--text-2);
+  font-size: .95rem;
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem var(--gutter) 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 2rem clamp(1.5rem, 4vw, 3rem);
+}
+.footer-head {
+  margin: 0 0 .5rem;
+  font-family: var(--display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--arch-black);
 }
 .footer p { margin: 0; }
+.footer-col a { overflow-wrap: anywhere; }
+.footer .footer-base {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem var(--gutter) 2rem;
+  border-top: 1px solid var(--rule);
+  font-size: .85rem;
+}
 
 @media (max-width: 640px) {
   :root {
@@ -201,5 +224,6 @@ main {
   }
   .tagline { max-width: 26ch; }
   .ov-row { grid-template-columns: 1fr; }
+  .footer-inner { grid-template-columns: 1fr; }
   .ov-app { height: clamp(300px, 70vh, 480px); }
 }
