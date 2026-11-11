@@ -156,6 +156,31 @@ main {
   text-align: center;
 }
 .ph-text { min-height: 280px; }
+/* overview: project photo, then text (left) + flow diagram (right) */
+.overview-photo { margin: 0 0 2.5rem; aspect-ratio: 16 / 9; }
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: stretch;
+}
+.overview-text { max-width: 62ch; display: flex; flex-direction: column; }
+.overview-text p { margin: 0 0 1.1em; }
+.ph-line {
+  flex: 1;
+  min-height: 12rem;
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--bulldog-red);
+  background: var(--white);
+  color: var(--text-2);
+}
+.overview-flow { margin: 0; aspect-ratio: 4 / 3; }
+.overview-photo img, .overview-flow img {
+  display: block; width: 100%; height: 100%;
+  object-fit: contain; border-radius: 6px; background: var(--white);
+}
+.overview-photo:has(img), .overview-flow:has(img) { border: 0; padding: 0; background: none; }
+
 .ph-tall { min-height: 640px; }
 
 .footer {
@@ -174,4 +199,5 @@ main {
     --dial-max: clamp(96px, 30vw, 128px); --dial-min: 44px;
   }
   .tagline { max-width: 26ch; }
+  .overview-grid { grid-template-columns: 1fr; }
 }
