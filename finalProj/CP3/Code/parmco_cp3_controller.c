@@ -324,9 +324,16 @@ static void timed_step(int asm_dir, float rpm)
     unsigned int now = get_current_timer();
     int late = (int)(now - next_deadline);
     if (late > (int)period) next_deadline = now;        /* recover after a hiccup */
+    /* Sleep until ~200 us before the deadline, then let the assembly loop
+       busy-wait the rest. Spinning only briefly leaves the CPU free for the
+       kernel's Bluetooth work (long spins at RT priority dropped BLE links). */
     int wait = (int)(next_deadline - now);
-    if (wait > (int)(timer_freq / 500))                 /* > 2 ms: sleep most of it */
-        usleep((useconds_t)((double)wait / timer_freq * 1e6) - 1000);
+    int spin = (int)(timer_freq / 5000);                /* 200 us in ticks */
+    if (wait > spin) {
+        double sleep_ns = (double)(wait - spin) / timer_freq * 1e9;
+        struct timespec ts = { (time_t)(sleep_ns / 1e9), (long)fmod(sleep_ns, 1e9) };
+        clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+    }
     step_at_deadline(next_deadline, asm_dir, STEP_MODE, motor_pins);
     next_deadline += period;
 
@@ -527,7 +534,12 @@ static float maintain_target(float desired, float cur)
 static void *motor_thread(void *arg)
 {
     (void)arg;
-    struct sched_param sp = { .sched_priority = 80 };
+    /* Run on core 3 (core 0 services most interrupts, incl. Bluetooth UART). */
+    cpu_set_t cpus;
+    CPU_ZERO(&cpus);
+    CPU_SET(3, &cpus);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpus), &cpus);
+    struct sched_param sp = { .sched_priority = 40 };
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
         printf("Note: real-time priority unavailable (run with sudo)\n");
 

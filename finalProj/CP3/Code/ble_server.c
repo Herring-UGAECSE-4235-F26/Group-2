@@ -12,6 +12,9 @@
  *        /org/parmco/service0/char0  org.bluez.GattCharacteristic1  (RX, write)
  *        /org/parmco/service0/char1  org.bluez.GattCharacteristic1  (TX, notify)
  *        /org/parmco/adv0            org.bluez.LEAdvertisement1     ("PARMCO")
+ *        /org/parmco/agent           org.bluez.Agent1  (auto-accepts "Just Works"
+ *                                    pairing so the iPhone bonds once and the
+ *                                    connection is remembered on both sides)
  *   3. We call GattManager1.RegisterApplication and
  *      LEAdvertisingManager1.RegisterAdvertisement on /org/bluez/hci0. These
  *      calls are asynchronous because BlueZ calls back into our objects while
@@ -40,6 +43,7 @@
 #define RX_PATH          "/org/parmco/service0/char0"
 #define TX_PATH          "/org/parmco/service0/char1"
 #define ADV_PATH         "/org/parmco/adv0"
+#define AGENT_PATH       "/org/parmco/agent"
 
 #define SERVICE_UUID     "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define RX_UUID          "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
@@ -76,6 +80,17 @@ static const gchar introspection_xml[] =
     "    <property name='Notifying' type='b' access='read'/>"
     "    <property name='Value' type='ay' access='read'/>"
     "  </interface>"
+    "  <interface name='org.bluez.Agent1'>"
+    "    <method name='Release'/>"
+    "    <method name='RequestPinCode'><arg type='o' direction='in'/><arg type='s' direction='out'/></method>"
+    "    <method name='DisplayPinCode'><arg type='o' direction='in'/><arg type='s' direction='in'/></method>"
+    "    <method name='RequestPasskey'><arg type='o' direction='in'/><arg type='u' direction='out'/></method>"
+    "    <method name='DisplayPasskey'><arg type='o' direction='in'/><arg type='u' direction='in'/><arg type='q' direction='in'/></method>"
+    "    <method name='RequestConfirmation'><arg type='o' direction='in'/><arg type='u' direction='in'/></method>"
+    "    <method name='RequestAuthorization'><arg type='o' direction='in'/></method>"
+    "    <method name='AuthorizeService'><arg type='o' direction='in'/><arg type='s' direction='in'/></method>"
+    "    <method name='Cancel'/>"
+    "  </interface>"
     "  <interface name='org.bluez.LEAdvertisement1'>"
     "    <method name='Release'/>"
     "    <property name='Type' type='s' access='read'/>"
@@ -84,14 +99,14 @@ static const gchar introspection_xml[] =
     "  </interface>"
     "</node>";
 
-enum obj_id { OBJ_APP = 1, OBJ_SERVICE, OBJ_RX, OBJ_TX, OBJ_ADV };
+enum obj_id { OBJ_APP = 1, OBJ_SERVICE, OBJ_RX, OBJ_TX, OBJ_ADV, OBJ_AGENT };
 
 static GDBusNodeInfo   *node_info;
 static GDBusConnection *bus;
 static GMainLoop       *loop;
 static pthread_t        ble_thread;
 static int              thread_started;
-static guint            reg_ids[5];
+static guint            reg_ids[6];
 static guint            device_sub_id;
 
 static ble_line_cb      line_cb;
@@ -193,6 +208,16 @@ static void set_connected(int c)
     if (changed && conn_cb) conn_cb(c);
 }
 
+/* Mark a phone as trusted so later reconnects need no authorization. */
+static void trust_device(const char *path)
+{
+    if (!bus || !path || !*path) return;
+    g_dbus_connection_call(bus, BLUEZ, path, "org.freedesktop.DBus.Properties", "Set",
+                           g_variant_new("(ssv)", "org.bluez.Device1", "Trusted",
+                                         g_variant_new_boolean(TRUE)),
+                           NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+}
+
 /* -------------------------------------------------------- method handlers */
 
 static void handle_write(GVariant *params)
@@ -260,6 +285,21 @@ static void method_call(GDBusConnection *c, const gchar *sender, const gchar *pa
         set_connected(0);
         printf("[BLE] phone unsubscribed/disconnected\n");
         fflush(stdout);
+    } else if (id == OBJ_AGENT) {
+        /* Pairing agent, capability NoInputNoOutput ("Just Works"):
+           accept every pairing / authorization request and trust the phone. */
+        const gchar *dev = NULL;
+        if (g_variant_n_children(params) > 0)
+            g_variant_get_child(params, 0, "&o", &dev);
+        printf("[BLE] pairing agent: %s %s -> accepted\n", method, dev ? dev : "");
+        fflush(stdout);
+        if (!g_strcmp0(method, "RequestPinCode"))
+            g_dbus_method_invocation_return_value(inv, g_variant_new("(s)", "0000"));
+        else if (!g_strcmp0(method, "RequestPasskey"))
+            g_dbus_method_invocation_return_value(inv, g_variant_new("(u)", 0));
+        else
+            g_dbus_method_invocation_return_value(inv, NULL);
+        if (dev) trust_device(dev);
     } else if (!g_strcmp0(method, "Release")) {
         g_dbus_method_invocation_return_value(inv, NULL);
     } else {
@@ -291,6 +331,13 @@ static void device_props_changed(GDBusConnection *c, const gchar *sender, const 
     gboolean connected = TRUE;
 
     g_variant_get(params, "(&s@a{sv}@as)", &changed_iface, &changed, &invalidated);
+    gboolean paired = FALSE;
+    if (!g_strcmp0(changed_iface, "org.bluez.Device1") &&
+        g_variant_lookup(changed, "Paired", "b", &paired) && paired) {
+        printf("[BLE] device paired: %s (trusted)\n", path);
+        fflush(stdout);
+        trust_device(path);
+    }
     if (!g_strcmp0(changed_iface, "org.bluez.Device1") &&
         g_variant_lookup(changed, "Connected", "b", &connected) && !connected) {
         int ours;
@@ -357,7 +404,8 @@ static void *ble_thread_main(void *arg)
         export_object(1, SERVICE_PATH, "org.bluez.GattService1", OBJ_SERVICE) ||
         export_object(2, RX_PATH, "org.bluez.GattCharacteristic1", OBJ_RX) ||
         export_object(3, TX_PATH, "org.bluez.GattCharacteristic1", OBJ_TX) ||
-        export_object(4, ADV_PATH, "org.bluez.LEAdvertisement1", OBJ_ADV))
+        export_object(4, ADV_PATH, "org.bluez.LEAdvertisement1", OBJ_ADV) ||
+        export_object(5, AGENT_PATH, "org.bluez.Agent1", OBJ_AGENT))
         goto out;
 
     device_sub_id = g_dbus_connection_signal_subscribe(
@@ -369,6 +417,24 @@ static void *ble_thread_main(void *arg)
                            g_variant_new("(ssv)", "org.bluez.Adapter1", "Powered",
                                          g_variant_new_boolean(TRUE)),
                            NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+
+    /* Accept pairing without user input on the Pi, and stay pairable. */
+    g_dbus_connection_call(bus, BLUEZ, ADAPTER_PATH, "org.freedesktop.DBus.Properties", "Set",
+                           g_variant_new("(ssv)", "org.bluez.Adapter1", "Pairable",
+                                         g_variant_new_boolean(TRUE)),
+                           NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+    g_dbus_connection_call(bus, BLUEZ, ADAPTER_PATH, "org.freedesktop.DBus.Properties", "Set",
+                           g_variant_new("(ssv)", "org.bluez.Adapter1", "PairableTimeout",
+                                         g_variant_new_uint32(0)),
+                           NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL, NULL);
+    g_dbus_connection_call(bus, BLUEZ, "/org/bluez", "org.bluez.AgentManager1", "RegisterAgent",
+                           g_variant_new("(os)", AGENT_PATH, "NoInputNoOutput"),
+                           NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, register_done,
+                           "pairing agent");
+    g_dbus_connection_call(bus, BLUEZ, "/org/bluez", "org.bluez.AgentManager1",
+                           "RequestDefaultAgent", g_variant_new("(o)", AGENT_PATH),
+                           NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, register_done,
+                           "default agent");
 
     g_dbus_connection_call(bus, BLUEZ, ADAPTER_PATH, "org.bluez.GattManager1",
                            "RegisterApplication",
@@ -389,7 +455,7 @@ static void *ble_thread_main(void *arg)
 
 out:
     if (bus) {
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 6; i++)
             if (reg_ids[i]) g_dbus_connection_unregister_object(bus, reg_ids[i]);
         if (device_sub_id) g_dbus_connection_signal_unsubscribe(bus, device_sub_id);
         g_object_unref(bus);
