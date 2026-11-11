@@ -23,9 +23,10 @@
 <header class="masthead" id="masthead">
   <div class="masthead-inner">
     <div class="title-block">
-      <p class="course">[Course · Group · Term]</p>
+      <p class="course"><!-- [Human edit start] -->ECSE 4235 · Group 2 · Fall 2026<!-- [END HUMAN EDIT] --></p> <!-- filled in course info -->
       <h1 class="title">PARMCO</h1>
-      <p class="tagline">[One-sentence project tagline]</p>
+      <p class="tagline"><!-- [Human edit start] -->Phone App RP4 Motor Controller<!-- [END HUMAN EDIT] --></p> <!-- project title filled in-->
+      <p class="tagline"><!-- [Human edit start] -->Created by Elvin Alvarez and Maya Nessmith<!-- [END HUMAN EDIT] --></p> <!-- added authors below acronym-->
     </div>
 
     <!-- Propeller: rotates clockwise from 0° at the top of the page to 360° at the bottom -->
@@ -72,16 +73,39 @@
       <span>[Image: photo of the physical project]</span>
     </figure>
 
-    <div class="overview-grid">
-      <!-- Overview text: replace the placeholder paragraph with your overview. -->
-      <div class="overview-text">
-        <p class="ph-line">[Project overview text]</p>
+    <!-- Row 1: overview paragraph 1 + photo of the iPhone app.
+         To insert the app image: replace the <figure> with
+         <figure class="ov-app"><img src="assets/app.png" alt="[describe the screenshot]"></figure> -->
+    <div class="ov-row">
+      <div class="ov-text">
+        <!-- [HUMAN EDIT] filled section to discuss project overview (paragraph 1) -->
+        <p>PARMCO is a project designed to allow users to control a stepper motor, with a Raspberry Pi 4, via a phone app.
+          The app acts as the interface, allowing users to control various aspects of the motor's behavior while being user friendly and safe to use.
+          Such controls include speed adjustment, spin direction control, zero calibration, angle set, position feedback, and more.
+          PARMCO aims to provide students with an educative and informative experience regarding the use of AI by using AI as the primary author of the project.
+          The website serves as a platform to showcase the design process, progress, experiences, and results of the project.</p>
+        <!-- [END HUMAN EDIT] -->
       </div>
+      <figure class="ov-app ph">
+        <span>[Image: the PARMCO iPhone app]</span>
+      </figure>
+    </div>
 
-      <!-- High-level flow diagram of the app and RP4 logic.
-           To insert: replace this <figure> with
-           <figure class="overview-flow"><img src="assets/flow.svg" alt="[describe the diagram]"></figure> -->
-      <figure class="overview-flow ph">
+    <!-- Row 2: overview paragraph 2 + high-level flow diagram of the app and RP4 logic.
+         To insert the diagram: replace the <figure> with
+         <figure class="ov-flow"><img src="assets/flow.svg" alt="[describe the diagram]"></figure> -->
+    <div class="ov-row">
+      <div class="ov-text">
+        <!-- [HUMAN EDIT] filled section to discuss project overview (paragraph 2) -->
+        <p>PARMCO is created over a seven week period with three progress checkpoints and one final checkpoint.
+          Checkpoints are designed to ensure steady progress and provide measurements of success and goal achievements.
+          Additionally, each checkpoint is designed to guide teams towards the final objective while allowing for creativity and problem solving.
+          Various design constraints and requirements must be met, in order to remain compliant with the project specifications and guidelines.
+          Project requirements are discussed in more detail under the <a href="#targets">Design targets</a> section.
+          <a href="#checkpoints">Checkpoints</a> goes into detail about the design process and results for each checkpoint, leading up to the final project delivery.</p>
+        <!-- [END HUMAN EDIT] -->
+      </div>
+      <figure class="ov-flow ph">
         <span>[Image: high-level flow diagram of the app and RP4 logic]</span>
       </figure>
     </div>

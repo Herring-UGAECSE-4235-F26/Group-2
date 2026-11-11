@@ -156,30 +156,30 @@ main {
   text-align: center;
 }
 .ph-text { min-height: 280px; }
-/* overview: project photo, then text (left) + flow diagram (right) */
-.overview-photo { margin: 0 0 2.5rem; aspect-ratio: 16 / 9; }
-.overview-grid {
+/* overview: full-width project photo, then two rows of text (left) + image (right).
+   Images are centred beside their paragraph and never stretch to its height. */
+.overview-photo { margin: 0 0 3rem; aspect-ratio: 16 / 9; }
+.ov-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(1.5rem, 4vw, 3rem);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  align-items: center;
 }
-.overview-text { max-width: 62ch; display: flex; flex-direction: column; }
-.overview-text p { margin: 0 0 1.1em; }
-.ph-line {
-  flex: 1;
-  min-height: 12rem;
-  padding: 1rem 1.25rem;
-  border-left: 3px solid var(--bulldog-red);
-  background: var(--white);
-  color: var(--text-2);
+.ov-row + .ov-row { margin-top: clamp(2.5rem, 6vw, 4rem); }
+.ov-text p { margin: 0; max-width: 62ch; }
+.ov-text p + p { margin-top: 1.1em; }
+.ov-app {
+  margin: 0;
+  justify-self: center;
+  height: clamp(320px, 62vh, 540px);
+  aspect-ratio: 9 / 19.5;            /* iPhone screen proportions */
 }
-.overview-flow { margin: 0; aspect-ratio: 4 / 3; }
-.overview-photo img, .overview-flow img {
+.ov-flow { margin: 0; width: 100%; aspect-ratio: 4 / 3; }
+.overview-photo img, .ov-app img, .ov-flow img {
   display: block; width: 100%; height: 100%;
-  object-fit: contain; border-radius: 6px; background: var(--white);
+  object-fit: contain; border-radius: 6px;
 }
-.overview-photo:has(img), .overview-flow:has(img) { border: 0; padding: 0; background: none; }
+.overview-photo:has(img), .ov-app:has(img), .ov-flow:has(img) { border: 0; padding: 0; background: none; }
 
 .ph-tall { min-height: 640px; }
 
@@ -199,5 +199,6 @@ main {
     --dial-max: clamp(96px, 30vw, 128px); --dial-min: 44px;
   }
   .tagline { max-width: 26ch; }
-  .overview-grid { grid-template-columns: 1fr; }
+  .ov-row { grid-template-columns: 1fr; }
+  .ov-app { height: clamp(300px, 70vh, 480px); }
 }
