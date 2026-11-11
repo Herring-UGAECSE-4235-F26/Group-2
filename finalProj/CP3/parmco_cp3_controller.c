@@ -134,103 +134,97 @@ static int process_command(
         } else {
             steps_per_sec = rpm * (mode ? 400.0f : 200.0f) / 60.0f;
         }
-    } else if (!strcmp(cmd, "CALIBRATE_ZERO") || !strcmp(cmd, "SET_ZERO") ||
-               !strncmp(cmd, "ANGLE:", 6) || !strcmp(cmd, "MAINTAIN:ON") ||
-               !strcmp(cmd, "MAINTAIN:OFF") || !strcmp(cmd, "LOG:START") ||
-               !strcmp(cmd, "LOG:STOP")) {
-        snprintf(response, sizeof(response), "ERR:NOT_IMPLEMENTED");
-        valid = 0;
     } else if (!strcmp(cmd, "LOG:START")) {
 
-    if (*log_file != NULL) {
-        snprintf(response, sizeof(response),
-                 "ERR:LOG_ALREADY_RUNNING");
-    } else {
-        time_t now = time(NULL);
-        struct tm tm_now;
-        char filename[80];
+        if (*log_file != NULL) {
+            snprintf(response, sizeof(response),
+                    "ERR:LOG_ALREADY_RUNNING");
+        } else {
+            time_t now = time(NULL);
+            struct tm tm_now;
+            char filename[80];
 
-        localtime_r(&now, &tm_now);
+            localtime_r(&now, &tm_now);
 
-        strftime(filename, sizeof(filename),
-                 "parmco_log_%Y%m%d_%H%M%S.csv",
-                 &tm_now);
+            strftime(filename, sizeof(filename),
+                    "parmco_log_%Y%m%d_%H%M%S.csv",
+                    &tm_now);
 
-        *log_file = fopen(filename, "w");
+            *log_file = fopen(filename, "w");
+
+            if (*log_file == NULL) {
+                snprintf(response, sizeof(response),
+                        "ERR:LOG_OPEN_FAILED");
+            } else {
+                fprintf(*log_file,
+                        "elapsed_s,commanded_rpm,ir_rpm,running,direction\n");
+
+                fflush(*log_file);
+
+                *log_start = monotonic_seconds();
+
+                snprintf(response, sizeof(response),
+                        "LOG:STARTED:%s", filename);
+            }
+        }
+
+        valid = 0;
+    } else if (!strcmp(cmd, "LOG:STOP")) {
 
         if (*log_file == NULL) {
             snprintf(response, sizeof(response),
-                     "ERR:LOG_OPEN_FAILED");
+                    "ERR:LOG_NOT_RUNNING");
         } else {
-            fprintf(*log_file,
-                    "elapsed_s,commanded_rpm,ir_rpm,running,direction\n");
-
-            fflush(*log_file);
-
-            *log_start = monotonic_seconds();
+            fclose(*log_file);
+            *log_file = NULL;
 
             snprintf(response, sizeof(response),
-                     "LOG:STARTED:%s", filename);
+                    "ACK:LOG:STOP");
         }
-    }
 
-    valid = 0;
-} else if (!strcmp(cmd, "LOG:STOP")) {
+        valid = 0;
+    } else if (!strcmp(cmd, "STATUS")) {
 
-    if (*log_file == NULL) {
-        snprintf(response, sizeof(response),
-                 "ERR:LOG_NOT_RUNNING");
-    } else {
-        fclose(*log_file);
-        *log_file = NULL;
+        float rpm = steps_per_sec * 60.0f /
+                    (mode ? 400.0f : 200.0f);
 
         snprintf(response, sizeof(response),
-                 "ACK:LOG:STOP");
-    }
+                "STATUS:%s:%s:%.2f:%.2f:%s",
+                running ? "RUNNING" : "STOPPED",
+                direction ? "CW" : "CCW",
+                rpm,
+                latest_ir_rpm,
+                *log_file ? "LOGGING" : "NOT_LOGGING");
 
-    valid = 0;
-} else if (!strcmp(cmd, "STATUS")) {
-
-    float rpm = steps_per_sec * 60.0f /
-                (mode ? 400.0f : 200.0f);
-
-    snprintf(response, sizeof(response),
-             "STATUS:%s:%s:%.2f:%.2f:%s",
-             running ? "RUNNING" : "STOPPED",
-             direction ? "CW" : "CCW",
-             rpm,
-             latest_ir_rpm,
-             *log_file ? "LOGGING" : "NOT_LOGGING");
-
-    valid = 0;
-}
-else if (!strcmp(cmd, "CALIBRATE_ZERO") ||
-         !strcmp(cmd, "SET_ZERO") ||
-         !strncmp(cmd, "ANGLE:", 6)) {
-
-    snprintf(response, sizeof(response),
-             "ERR:ENCODER_UNAVAILABLE");
-
-    valid = 0;
-}
-else if (!strcmp(cmd, "MAINTAIN:ON") ||
-         !strcmp(cmd, "MAINTAIN:OFF")) {
-
-    snprintf(response, sizeof(response),
-             "ERR:MAINTAIN_UNAVAILABLE");
-
-    valid = 0;
-}
-else {
-        snprintf(response, sizeof(response), "ERR:UNKNOWN_COMMAND");
         valid = 0;
     }
-    if (valid) snprintf(response, sizeof(response), "ACK:%s", cmd);
-    pthread_mutex_unlock(&state_lock);
-    printf("Sending: %s\n", response);
-    fflush(stdout);
-    return send_message(fd, response);
-}
+    else if (!strcmp(cmd, "CALIBRATE_ZERO") ||
+            !strcmp(cmd, "SET_ZERO") ||
+            !strncmp(cmd, "ANGLE:", 6)) {
+
+        snprintf(response, sizeof(response),
+                "ERR:ENCODER_UNAVAILABLE");
+
+        valid = 0;
+    }
+    else if (!strcmp(cmd, "MAINTAIN:ON") ||
+            !strcmp(cmd, "MAINTAIN:OFF")) {
+
+        snprintf(response, sizeof(response),
+                "ERR:MAINTAIN_UNAVAILABLE");
+
+        valid = 0;
+    }
+    else {
+            snprintf(response, sizeof(response), "ERR:UNKNOWN_COMMAND");
+            valid = 0;
+        }
+        if (valid) snprintf(response, sizeof(response), "ACK:%s", cmd);
+        pthread_mutex_unlock(&state_lock);
+        printf("Sending: %s\n", response);
+        fflush(stdout);
+        return send_message(fd, response);
+    }
 
 
 static void handle_client(int fd) {
