@@ -172,12 +172,12 @@ main {
 .ov-app {
   margin: 0;
   justify-self: center;
-  height: clamp(320px, 62vh, 540px);
+  height: clamp(240px, 38vh, 320px);
   aspect-ratio: 9 / 19.5;            /* iPhone screen proportions */
 }
 .ov-flow { margin: 0; width: 100%; aspect-ratio: 4 / 3; }
 /* paragraph with its diagram underneath, shown at the image's own proportions */
-.ov-stack { margin-top: clamp(2.5rem, 6vw, 4rem); max-width: 980px; }
+.ov-stack { margin-top: clamp(1.75rem, 4vw, 2.5rem); max-width: 980px; }
 .ov-stack .ov-text p { max-width: none; }          /* paragraph spans the same width as the flow chart */
 .ov-stack .ov-flow { aspect-ratio: auto; max-width: 980px; margin: 2rem 0 0; }
 .ov-stack .ov-flow img { height: auto; }
@@ -279,5 +279,5 @@ main {
   .ov-row { grid-template-columns: 1fr; }
   .footer-inner { grid-template-columns: 1fr; }
   .cp-grid { grid-template-columns: 1fr; }
-  .ov-app { height: clamp(300px, 70vh, 480px); }
+  .ov-app { height: clamp(260px, 55vh, 400px); }
 }
