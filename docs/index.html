@@ -58,7 +58,7 @@
 <main id="content">
   <nav class="section-nav" aria-label="Sections">
     <a href="#overview">Overview</a>
-    <a href="#targets">Design targets</a>
+    <a href="#targets">Design Targets</a>
     <a href="#checkpoints">Checkpoints</a>
   </nav>
 
@@ -99,8 +99,21 @@
           Checkpoints are designed to ensure steady progress and provide measurements of success and goal achievements.
           Additionally, each checkpoint is designed to guide teams towards the final objective while allowing for creativity and problem solving.
           Various design constraints and requirements must be met, in order to remain compliant with the project specifications and guidelines.
-          Project requirements are discussed in more detail under the <a href="#targets">Design targets</a> section.
+          Project requirements are discussed in more detail under the <a href="#targets">Design Targets</a> section.
           <a href="#checkpoints">Checkpoints</a> goes into detail about the design process and results for each checkpoint, leading up to the final project delivery.</p>
+        <!-- [END HUMAN EDIT] -->
+      </div>
+      <div class="ov-stack">
+      <div class="ov-text">
+        <!-- [HUMAN EDIT] filled section to discuss project overview (paragraph 3) -->
+        <p>From a high level overview, PARMCO allows users to control a stepper motor via a mobile app.
+          User input controls are transmitted, via bluetooth, to the RP4. The RP4 uses the user commands and the enable input to turn on the motor and control RPM via the GPIO.
+          To prevent damage to the RP4, the motor isolated with an octocoupler and an H-bridge that enables power to the motor and drives the stepper motor.
+          Theoretical calculations to obtain target motor speeds can be far from actual performance.
+          To account for this, an encoder and IR sensor are used to provide speed and position feedback.
+          Using the feedback, specific motor control adjustments can be made in real-time, allowing for rpm and angle targets to be met.
+
+        </p>
         <!-- [END HUMAN EDIT] -->
       </div>
       <figure class="ov-flow ph">
@@ -116,7 +129,149 @@
 
   <section id="checkpoints" class="section">
     <h2>Checkpoints</h2>
-    <div class="ph ph-text">[Checkpoint timeline content]</div>
+    <!-- One article per checkpoint. Each has four blocks: Goals, Plan of attack,
+         AI interaction and Results. Replace each [placeholder] paragraph. -->
+    <nav class="cp-nav" aria-label="Checkpoints">
+      <a href="#cp1"><span class="cp-num" aria-hidden="true">1</span>Checkpoint 1</a>
+      <a href="#cp2"><span class="cp-num" aria-hidden="true">2</span>Checkpoint 2</a>
+      <a href="#cp3"><span class="cp-num" aria-hidden="true">3</span>Checkpoint 3</a>
+      <a href="#final"><span class="cp-num" aria-hidden="true">4</span>Final deliverable</a>
+    </nav>
+
+    <!-- ===== Checkpoint 1 ===== -->
+    <article id="cp1" class="cp">
+      <header class="cp-head">
+        <span class="cp-num" aria-hidden="true">1</span>
+        <div>
+          <h3>Checkpoint 1</h3>
+          <p class="cp-meta">Oct 20, 2026</p>
+        </div>
+      </header>
+      <div class="cp-grid">
+        <section class="cp-block">
+          <h4>Goals</h4>
+          <!--[HUMAN EDIT]-->
+          <p>Checkpoint one (CP1) serves to establishes a solid foundation for the project to come.
+            The primary target of this checkpoint is to obtain a working skeleton of the project that will be further built on.
+            In addition to controlling a stepper motor, using keyboard commands, students must also follow and abide by a pre-power inspection check.
+            AI must be the primary author to the motor control code and circuit design.
+            After obtaining motor movement and control, a stall speed characterization must be conducted to ensure the motor meets performance specifications.
+          </p>
+          <!--[END HUMAN EDIT]needed to fill in CP1 goals-->
+        </section>
+        <section class="cp-block">
+          <h4>Plan of attack</h4>
+          <!--[HUMAN EDIT]-->
+          <p>To achieve the goals set for CP1, the team will follow a structured approach:
+            <ol>
+              <li>Define the project timeline and key milestones.</li>
+              <li>Develop a design for the motor control system.</li>
+              <li>Verify circuit design prior to implementation.</li>
+              <li>Develop motor control and keyboard functionality.</li>
+              <li>Conduct pre-power inspection check.</li>
+              <li>Confirm circuit functionality through testing.</li>
+              <li>Perform stall speed characterization tests on the motor.</li>
+            </ol>
+          </p>
+          <!--[END HUMAN EDIT]Filled in the teams plan of attack-->
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>AI interaction</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 1: AI interaction]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>Results</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 1: results]</p>
+        </section>
+      </div>
+    </article>
+
+    <!-- ===== Checkpoint 2 ===== -->
+    <article id="cp2" class="cp">
+      <header class="cp-head">
+        <span class="cp-num" aria-hidden="true">2</span>
+        <div>
+          <h3>Checkpoint 2</h3>
+          <p class="cp-meta">Oct 29, 2026</p>
+        </div>
+      </header>
+      <div class="cp-grid">
+        <section class="cp-block">
+          <h4>Goals</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 2: goals]</p>
+        </section>
+        <section class="cp-block">
+          <h4>Plan of attack</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 2: plan of attack]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>AI interaction</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 2: AI interaction]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>Results</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 2: results]</p>
+        </section>
+      </div>
+    </article>
+
+    <!-- ===== Checkpoint 3 ===== -->
+    <article id="cp3" class="cp">
+      <header class="cp-head">
+        <span class="cp-num" aria-hidden="true">3</span>
+        <div>
+          <h3>Checkpoint 3</h3>
+          <p class="cp-meta">Nov 12, 2026</p>
+        </div>
+      </header>
+      <div class="cp-grid">
+        <section class="cp-block">
+          <h4>Goals</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 3: goals]</p>
+        </section>
+        <section class="cp-block">
+          <h4>Plan of attack</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 3: plan of attack]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>AI interaction</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 3: AI interaction]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>Results</h4>
+          <p class="ph ph-text cp-ph">[Checkpoint 3: results]</p>
+        </section>
+      </div>
+    </article>
+
+    <!-- ===== Final deliverable ===== -->
+    <article id="final" class="cp">
+      <header class="cp-head">
+        <span class="cp-num" aria-hidden="true">4</span>
+        <div>
+          <h3>Final deliverable</h3>
+          <p class="cp-meta">Nov 30, 2026</p>
+        </div>
+      </header>
+      <div class="cp-grid">
+        <section class="cp-block">
+          <h4>Goals</h4>
+          <p class="ph ph-text cp-ph">[Final deliverable: goals]</p>
+        </section>
+        <section class="cp-block">
+          <h4>Plan of attack</h4>
+          <p class="ph ph-text cp-ph">[Final deliverable: plan of attack]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>AI interaction</h4>
+          <p class="ph ph-text cp-ph">[Final deliverable: AI interaction]</p>
+        </section>
+        <section class="cp-block cp-wide">
+          <h4>Results</h4>
+          <p class="ph ph-text cp-ph">[Final deliverable: results]</p>
+        </section>
+      </div>
+    </article>
   </section>
 </main>
 
