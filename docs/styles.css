@@ -228,6 +228,7 @@ main {
   gap: clamp(1rem, 3vw, 1.75rem);
 }
 .cp-block { display: flex; flex-direction: column; }
+.cp-block.cp-wide { grid-column: 1 / -1; }
 .cp-block h4 {
   margin: 0 0 .6rem;
   font-family: var(--display); font-weight: 500; font-size: 1.15rem;
