@@ -1,0 +1,29 @@
+# PARMCO boot service (AI-generated, final-check revision).
+# install.sh fills in @DIR@ (the folder holding parmco_final) and copies this
+# file to /etc/systemd/system/parmco.service. Do not edit the installed copy;
+# edit this template and run install.sh again.
+[Unit]
+Description=PARMCO motor controller (phone app mode)
+Documentation=file://@DIR@/README.md
+After=bluetooth.service
+Wants=bluetooth.service
+# restart together with bluetoothd so the GATT service is always registered
+PartOf=bluetooth.service
+
+[Service]
+Type=simple
+WorkingDirectory=@DIR@
+ExecStartPre=-/usr/sbin/rfkill unblock bluetooth
+ExecStartPre=-/usr/sbin/modprobe i2c-dev
+ExecStart=@DIR@/parmco_final -l @DIR@/logs
+# SIGINT runs the program's own shutdown: coils off, log closed, GPIO released
+KillSignal=SIGINT
+TimeoutStopSec=5
+Restart=always
+RestartSec=2
+# the motor thread uses real-time priority and locked memory
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
