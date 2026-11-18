@@ -39,7 +39,9 @@ struct IRCalibrationView: View {
 
     private let clearHold: TimeInterval = 2.0
     private let detectHold: TimeInterval = 1.0
-    private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    // Kept in @State: the parent view is rebuilt on every reading (20 Hz), and a
+    // plain `let` timer would be re-created each time and never fire.
+    @State private var tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     private var r: IRCalReading { link.irCal }
 
@@ -78,6 +80,7 @@ struct IRCalibrationView: View {
             if s == .connected { openedAt = Date(); link.startIRCalibration() }
         }
         .onReceive(tick) { _ in update() }
+        .onReceive(link.$irCal) { update($0) }         // also check on every reading
     }
 
     // MARK: - Steps
@@ -222,7 +225,10 @@ struct IRCalibrationView: View {
         if s == .done { doneEdges = r.edges }
     }
 
-    private func update() {
+    /// `reading` is the new value from link.$irCal, which publishes just before
+    /// link.irCal itself changes; the timer passes nil and uses link.irCal.
+    private func update(_ reading: IRCalReading? = nil) {
+        let r = reading ?? self.r
         now = Date()
         if r.edges > lastEdges {
             edgeTimes.append(contentsOf: Array(repeating: now, count: min(r.edges - lastEdges, 10)))
