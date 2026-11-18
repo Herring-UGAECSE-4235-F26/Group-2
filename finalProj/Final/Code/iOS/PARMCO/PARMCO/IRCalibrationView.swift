@@ -35,6 +35,7 @@ struct IRCalibrationView: View {
     @State private var lastEdges = 0
     @State private var doneEdges = 0
     @State private var now = Date()
+    @State private var openedAt = Date()
 
     private let clearHold: TimeInterval = 2.0
     private let detectHold: TimeInterval = 1.0
@@ -51,6 +52,7 @@ struct IRCalibrationView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     motorOffBanner
+                    linkProblem
                     progress
                     switch step {
                     case .clear:  clearStep
@@ -69,8 +71,12 @@ struct IRCalibrationView: View {
                 }
             }
         }
-        .onAppear { link.startIRCalibration() }
+        .onAppear { openedAt = Date(); link.startIRCalibration() }
         .onDisappear { link.stopIRCalibration() }
+        .onChange(of: link.state) { _, s in
+            // the RP4 leaves calibration mode on disconnect: re-enter it on reconnect
+            if s == .connected { openedAt = Date(); link.startIRCalibration() }
+        }
         .onReceive(tick) { _ in update() }
     }
 
@@ -169,6 +175,24 @@ struct IRCalibrationView: View {
     }
 
     // MARK: - Shared pieces
+
+    /// Explains why no readings are arriving, instead of waiting forever.
+    @ViewBuilder private var linkProblem: some View {
+        let waited = now.timeIntervalSince(openedAt)
+        if !link.isConnected {
+            Hint(icon: "antenna.radiowaves.left.and.right.slash", color: .red,
+                 text: "Not connected to the PARMCO. Calibration starts again by itself when the connection comes back.")
+        } else if link.irCalStatus == .unsupported {
+            Hint(icon: "exclamationmark.octagon.fill", color: .red,
+                 text: "The Pi is running an older PARMCO program without IR calibration (it answered ERR:UNKNOWN_COMMAND). On the Pi: cd finalProj/Final/Code, git pull, then make restart. Close this window and open it again.")
+        } else if link.irCalStatus == .waiting && waited > 3 {
+            Hint(icon: "clock.badge.exclamationmark", color: .orange,
+                 text: "No reply from the Pi after 3 s. Check the Messages card for what came back after \u{201C}→ IRCAL:START\u{201D}.")
+        } else if link.irCalStatus == .active && !r.received && waited > 2 {
+            Hint(icon: "exclamationmark.triangle.fill", color: .orange,
+                 text: "The Pi entered calibration mode but no sensor readings are arriving. On the Pi, run make logs and look for errors.")
+        }
+    }
 
     private var motorOffBanner: some View {
         Hint(icon: "hand.raised.fill", color: .blue,

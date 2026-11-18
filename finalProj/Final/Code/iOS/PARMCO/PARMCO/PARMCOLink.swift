@@ -50,6 +50,14 @@ struct Telemetry {
     var irCalActive = false
 }
 
+/// Where the IR calibration handshake with the RP4 stands.
+enum IRCalStatus {
+    case idle          // window closed
+    case waiting       // IRCAL:START sent, no reply yet
+    case active        // RP4 acknowledged (or readings are arriving)
+    case unsupported   // RP4 answered ERR:UNKNOWN_COMMAND: it runs an older program
+}
+
 /// Live IR sensor reading while the IR calibration window is open.
 struct IRCalReading {
     var blade = false        // true = a blade is in front of the sensor (beam broken)
@@ -79,6 +87,7 @@ final class PARMCOLink: NSObject, ObservableObject {
     @Published private(set) var lastEvent: String?
     @Published private(set) var rememberedName: String?
     @Published private(set) var irCal = IRCalReading()
+    @Published private(set) var irCalStatus: IRCalStatus = .idle
 
     private var central: CBCentralManager?
     /// Demo mode: no Bluetooth, fake "connected" state with sample readings.
@@ -158,10 +167,12 @@ final class PARMCOLink: NSObject, ObservableObject {
     /// IR sensor calibration: the RP4 turns the motor off and streams the sensor state.
     func startIRCalibration() {
         irCal = IRCalReading()
+        irCalStatus = .waiting
         send("IRCAL:START")
     }
 
     func stopIRCalibration() {
+        irCalStatus = .idle
         send("IRCAL:STOP")
     }
 
@@ -218,6 +229,7 @@ final class PARMCOLink: NSObject, ObservableObject {
         case "IRCAL:START":
             t.running = false; t.coilsOn = false; t.activity = "IDLE"; t.irRPM = 0
             t.irCalActive = true
+            irCalStatus = .active
             startDemoIRCal()
         case "IRCAL:STOP":
             t.irCalActive = false
@@ -258,9 +270,14 @@ final class PARMCOLink: NSObject, ObservableObject {
         }
         if line.hasPrefix("IRCAL:") {           // 20 Hz stream: not shown in Messages
             parseIRCal(String(line.dropFirst(6)))
+            if irCalStatus == .waiting { irCalStatus = .active }
             return
         }
         log("← \(line)")
+        if line == "ACK:IRCAL:START" { irCalStatus = .active }
+        if line.hasPrefix("ERR:UNKNOWN_COMMAND") && irCalStatus == .waiting {
+            irCalStatus = .unsupported
+        }
         if line.hasPrefix("ERR:") {
             lastError = Self.describe(error: line)
         } else if line.hasPrefix("EVT:") || line.hasPrefix("LOG:") {
@@ -332,6 +349,7 @@ final class PARMCOLink: NSObject, ObservableObject {
     private func resetToDefaults() {
         telemetry = Telemetry()          // Manual, CW, 20 RPM, stopped, not calibrated
         irCal = IRCalReading()
+        if irCalStatus != .idle { irCalStatus = .waiting }   // reconnect: window re-sends
         lastError = nil
         lastEvent = nil
     }
