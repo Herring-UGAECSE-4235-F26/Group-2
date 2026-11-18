@@ -14,7 +14,7 @@ No human edits yet. If you make one, mark it with
 | `motor_driver.s` | ARM assembly H-bridge interface: `step_routine`, `enable_routine`, `step_at_deadline` (step-timing loop) |
 | `Makefile` | Build, plus `install`, `status`, `logs`, `restart` and `run` targets |
 | `parmco.service`, `install.sh` | Boot service: starts the controller at power-up in phone-app mode |
-| `iOS/PARMCO/` | SwiftUI iPhone app (Xcode project) |
+| `iOS/PARMCO/` | SwiftUI iPhone app (Xcode project) ; `IRCalibrationView.swift` is the guided IR sensor calibration window |
 
 ## Build and run on the Pi
 
@@ -51,13 +51,14 @@ encoder by itself, the first time the motor moves.
 | `LOG:START[:label]` / `LOG:STOP` | `LOG:STARTED:<file>` / `LOG:STOPPED:<file>` |
 | `MARK[:text]` | Text into the log `event` column |
 | `HOLD:ON/OFF` | Feedback hold after position moves (on by default, reset to on at connect) |
+| `IRCAL:START` / `IRCAL:STOP` | IR sensor calibration mode: motor, hold and unlock off; `START`, `SET_ZERO` and `ANGLE:` refused with `ERR:IRCAL_ACTIVE`; the RP4 sends `IRCAL:blade=0\|1;edges=n;rpm=x` 20 times a second. Ends on `IRCAL:STOP` or disconnect |
 | `STATUS` | Telemetry now |
 
 Events sent to the phone include `EVT:MOVE_DONE`, `EVT:MOVE_FAILED`, `EVT:HOLD_CORRECTION` and
 `EVT:MAINTAIN_RESYNC`.
 
 RP4 → phone, 5 times a second:
-`TEL:ir=..;enc=..;ang=..;eok=..;cal=0|1;run=0|1;dir=CW|CCW;rpm=..;mode=MANUAL|MAINTAIN;unlock=0|1;act=IDLE|RUN|MOVE|HOLD;en=0|1;hold=0|1;log=0|1;logt=..;file=..`
+`TEL:ir=..;enc=..;ang=..;eok=..;cal=0|1;run=0|1;dir=CW|CCW;rpm=..;mode=MANUAL|MAINTAIN;unlock=0|1;act=IDLE|RUN|MOVE|HOLD;en=0|1;hold=0|1;log=0|1;logt=..;file=..;ircal=0|1`
 The Android app still receives the older `RPM_ACTUAL:`, `ENCODER_RPM:` and `ANGLE_ACTUAL:` lines once a second.
 
 ## How the key functions work
@@ -82,6 +83,11 @@ The Android app still receives the older `RPM_ACTUAL:`, `ENCODER_RPM:` and `ANGL
 * **Maintain.** Encoder-derived RPM (IR as fallback) feeds a small PI trim on the step rate.
   If the measured RPM is below half the desired RPM for 0.3 s, the coils are re-aligned
   with the rotor and the ramp restarts (`EVT:MAINTAIN_RESYNC`).
+* **IR sensor calibration.** The IR thread keeps the latest raw pin level and counts every
+  beam-break edge without debouncing, so chatter from a badly set potentiometer shows up
+  as extra counts. The app's calibration window (`IRCalibrationView.swift`) accepts step 1
+  only after the reading has stayed Clear with no new edges for 2 s, and step 2 after the
+  blade has been detected continuously for 1 s.
 * **Boot.** `parmco.service` starts the program after `bluetoothd`, restarts it if it exits,
   and restarts it with `bluetoothd`. The BLE server waits for the adapter at boot.
 * **Logging.** A separate 100 Hz thread writes the appendix columns, timestamped with

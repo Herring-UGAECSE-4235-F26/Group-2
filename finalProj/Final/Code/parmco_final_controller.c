@@ -27,6 +27,10 @@
  *     install.sh); the BLE server waits for the Bluetooth adapter to appear
  *   - CSV logs are given to the owner of the log folder (the service runs as
  *     root), and a log name is never reused
+ *   - IR sensor calibration mode (IRCAL:START / IRCAL:STOP): motor and hold
+ *     off so the blade turns freely by hand; the live sensor state is streamed
+ *     20 times a second (IRCAL:blade=0|1;edges=n;rpm=x) so the app can guide
+ *     the user through setting the sensor's potentiometer
  *
  * Build: make      Run: sudo ./parmco_final [-i] [-n] [-s] [-l logdir]
  *   -i  invert encoder direction (if the app angle runs opposite the protractor)
@@ -119,6 +123,9 @@ static float desired_rpm = RPM_DEFAULT;
 static int   maintain_mode;           /* 0 = Manual, 1 = Maintain */
 static int   unlock_on;
 static int   calibrated;
+static int   ircal_mode;               /* IR sensor calibration: motor locked out */
+static volatile int ir_level = 1;      /* last raw IR pin read (0 = blade in beam) */
+static volatile unsigned ircal_edges;  /* raw beam-break edges, not debounced */
 static int   hold_enabled = 1;
 static int   hold_default = 1;        /* re-applied on every connect */
 static int   move_req;                /* new position move requested */
@@ -841,7 +848,9 @@ static void *ir_thread(void *arg)
     while (run_program) {
         int cur = E4235_Read(PIN_IR);           /* class library GPIO read */
         if (cur >= 0) {
+            ir_level = cur;
             if (last == 1 && cur == 0) {         /* beam broken: falling edge */
+                ircal_edges++;                   /* every raw edge, to show chatter */
                 double t = now_s();
                 pthread_mutex_lock(&ir_lock);
                 if (ir_edge_n == 0 || t - ir_edges[0] > IR_DEBOUNCE_S) {
@@ -1008,7 +1017,7 @@ static void build_telemetry(char *buf, size_t n)
     pthread_mutex_lock(&state_lock);
     activity_t act = activity;
     int run = (act == ACT_RUN), cal = calibrated, d = dir_cw, mm = maintain_mode;
-    int unl = unlock_on, en = coils_enabled, hold = hold_enabled;
+    int unl = unlock_on, en = coils_enabled, hold = hold_enabled, ic = ircal_mode;
     float des = desired_rpm;
     pthread_mutex_unlock(&state_lock);
 
@@ -1027,22 +1036,34 @@ static void build_telemetry(char *buf, size_t n)
     static const char *acts[] = { "IDLE", "RUN", "MOVE", "HOLD" };
     snprintf(buf, n,
              "TEL:ir=%.1f;enc=%.1f;ang=%.1f;eok=%d;cal=%d;run=%d;dir=%s;rpm=%.1f;mode=%s;"
-             "unlock=%d;act=%s;en=%d;hold=%d;log=%d;logt=%.0f;file=%s",
+             "unlock=%d;act=%s;en=%d;hold=%d;log=%d;logt=%.0f;file=%s;ircal=%d",
              ir_rpm_now(), eok ? er : 0.0f, eok ? ea : 0.0f, eok, cal, run, d ? "CW" : "CCW",
-             des, mm ? "MAINTAIN" : "MANUAL", unl, acts[act], en, hold, logging, lt, lname);
+             des, mm ? "MAINTAIN" : "MANUAL", unl, acts[act], en, hold, logging, lt, lname, ic);
 }
 
 static void *telemetry_thread(void *arg)
 {
     (void)arg;
     int tick = 0;
+    const int sub = 20 / TELEMETRY_HZ;           /* 20 Hz loop: IR calibration stream */
     while (run_program) {
-        sleep_s(1.0 / TELEMETRY_HZ);
+        sleep_s(0.05);
+        tick++;
+        pthread_mutex_lock(&state_lock);
+        int ic = ircal_mode;
+        pthread_mutex_unlock(&state_lock);
+        if (ic) {
+            char l[96];
+            snprintf(l, sizeof(l), "IRCAL:blade=%d;edges=%u;rpm=%.1f",
+                     ir_level == 0, ircal_edges, ir_rpm_now());
+            broadcast(l);
+        }
+        if (tick % sub) continue;
         char tel[400];
         build_telemetry(tel, sizeof(tel));
         broadcast(tel);
         /* Legacy lines for the Android app, once per second */
-        if (++tick % TELEMETRY_HZ == 0) {
+        if (tick % 20 == 0) {
             char l[64];
             pthread_mutex_lock(&enc_lock);
             float ea = enc_angle, er = enc_rpm;
@@ -1074,6 +1095,7 @@ static void apply_defaults(void)
     unlock_on = 0;
     calibrated = 0;
     hold_enabled = hold_default;
+    ircal_mode = 0;
     cmd_angle = NAN;
     if (activity == ACT_HOLD) activity = ACT_IDLE;
     int idle = (activity == ACT_IDLE);
@@ -1120,6 +1142,37 @@ static void process_line(source_t src, const char *raw)
         build_telemetry(resp, sizeof(resp));
         reply(src, resp);
         return;
+    }
+    if (!strcmp(s, "IRCAL:START")) {
+        stop_all();                           /* coils off, hold off, unlock off */
+        pthread_mutex_lock(&state_lock);
+        ircal_mode = 1;
+        pthread_mutex_unlock(&state_lock);
+        ircal_edges = 0;
+        pthread_mutex_lock(&log_lock);
+        snprintf(log_event, sizeof(log_event), "ircal_start");
+        pthread_mutex_unlock(&log_lock);
+        reply(src, "ACK:IRCAL:START");
+        return;
+    }
+    if (!strcmp(s, "IRCAL:STOP")) {
+        pthread_mutex_lock(&state_lock);
+        ircal_mode = 0;
+        pthread_mutex_unlock(&state_lock);
+        pthread_mutex_lock(&log_lock);
+        snprintf(log_event, sizeof(log_event), "ircal_stop");
+        pthread_mutex_unlock(&log_lock);
+        reply(src, "ACK:IRCAL:STOP");
+        return;
+    }
+    {   /* while the IR sensor is being calibrated, nothing may move the motor */
+        pthread_mutex_lock(&state_lock);
+        int ic = ircal_mode;
+        pthread_mutex_unlock(&state_lock);
+        if (ic && (!strcmp(s, "START") || !strcmp(s, "SET_ZERO") || !strncmp(s, "ANGLE:", 6))) {
+            reply(src, "ERR:IRCAL_ACTIVE");
+            return;
+        }
     }
     if (!strcmp(s, "START")) {
         pthread_mutex_lock(&state_lock);

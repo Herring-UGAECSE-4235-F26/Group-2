@@ -60,6 +60,7 @@ protractor.
 | Maintain (Test E) | Fixed a bug: the integral stopped updating once it passed 1 RPM. The integral no longer builds up while the blade is being pushed. A change of desired RPM resets the trim. Each re-sync is sent as `EVT:MAINTAIN_RESYNC` and logged as `maintain_resync_N`. |
 | Logs for the writeup | Logs are owned by the repo's user, not root, so `git add` works. A file name is never reused, which matters because the Pi's clock can repeat with no internet. A mark sent just before Stop Logging is still written. |
 | App | The hold toggle shows on by default. A Maintain caption names the feedback source. |
+| IR sensor calibration (extra) | **Test controls › Calibrate IR sensor** turns the motor and hold off so the blade turns freely. The Pi streams the raw sensor state 20 times a second. The app walks through three steps: (1) blades away from the sensor, turn the potentiometer until the reading stays Clear for 2 s; (2) a blade in front of the sensor, detection confirmed after 1 s; (3) an optional hand-spin check showing pulse count and IR RPM. Start, Set to Zero and angle moves are refused while it is open (`ERR:IRCAL_ACTIVE`). |
 
 Everything else (commands, telemetry, logging columns, angle moves, over-range unlock,
 input rejection) is the same as CP3. See `../Documentation/AI_Software_Documentation.md`.

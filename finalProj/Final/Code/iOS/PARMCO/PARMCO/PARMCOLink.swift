@@ -14,6 +14,8 @@
 //     "Forget" clears it and the app scans again (re-pair).
 //   - Telemetry lines look like:
 //       TEL:ir=20.1;enc=19.9;ang=90.0;eok=1;cal=1;run=1;dir=CW;rpm=20.0;...
+//   - During IR sensor calibration the RP4 also sends, 20 times a second:
+//       IRCAL:blade=0|1;edges=n;rpm=x
 //
 
 import Foundation
@@ -45,6 +47,15 @@ struct Telemetry {
     var logging = false
     var logSeconds: Double = 0
     var logFile = ""
+    var irCalActive = false
+}
+
+/// Live IR sensor reading while the IR calibration window is open.
+struct IRCalReading {
+    var blade = false        // true = a blade is in front of the sensor (beam broken)
+    var edges = 0            // raw detections since calibration started (not debounced)
+    var rpm: Double = 0
+    var received = false     // at least one reading has arrived
 }
 
 struct DiscoveredPi: Identifiable {
@@ -67,6 +78,7 @@ final class PARMCOLink: NSObject, ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var lastEvent: String?
     @Published private(set) var rememberedName: String?
+    @Published private(set) var irCal = IRCalReading()
 
     private var central: CBCentralManager?
     /// Demo mode: no Bluetooth, fake "connected" state with sample readings.
@@ -76,6 +88,8 @@ final class PARMCOLink: NSObject, ObservableObject {
     private var rx: CBCharacteristic?
     private var rxBuffer = ""
     private var userDisconnected = false
+    private var demoTimer: Timer?
+    private var demoTick = 0
 
     init(demo: Bool = false) {
         isDemo = demo
@@ -141,6 +155,16 @@ final class PARMCOLink: NSObject, ObservableObject {
 
     func clearError() { lastError = nil }
 
+    /// IR sensor calibration: the RP4 turns the motor off and streams the sensor state.
+    func startIRCalibration() {
+        irCal = IRCalReading()
+        send("IRCAL:START")
+    }
+
+    func stopIRCalibration() {
+        send("IRCAL:STOP")
+    }
+
     /// Update the displayed state immediately; the next telemetry confirms it.
     func optimistic(_ change: (inout Telemetry) -> Void) { change(&telemetry) }
 
@@ -191,6 +215,13 @@ final class PARMCOLink: NSObject, ObservableObject {
         case "CALIBRATE_ZERO": t.calibrated = true; t.angle = 0
         case "SET_ZERO": t.angle = 0
         case "LOG:STOP": t.logging = false; t.logFile = ""; t.logSeconds = 0
+        case "IRCAL:START":
+            t.running = false; t.coilsOn = false; t.activity = "IDLE"; t.irRPM = 0
+            t.irCalActive = true
+            startDemoIRCal()
+        case "IRCAL:STOP":
+            t.irCalActive = false
+            demoTimer?.invalidate(); demoTimer = nil
         default:
             if command.hasPrefix("RPM:"), let v = Double(command.dropFirst(4)) { t.desiredRPM = v }
             if command.hasPrefix("ANGLE:"), let v = Double(command.dropFirst(6)) { t.angle = v }
@@ -202,11 +233,31 @@ final class PARMCOLink: NSObject, ObservableObject {
         log("← ACK (demo)")
     }
 
+    /// Demo only: pretend the blade is turned by hand (clear 4 s, in front 3 s, repeat).
+    private func startDemoIRCal() {
+        demoTimer?.invalidate()
+        demoTick = 0
+        irCal = IRCalReading(blade: false, edges: 0, rpm: 0, received: true)
+        demoTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.demoTick += 1
+            let blade = self.demoTick % 70 >= 40
+            var r = self.irCal
+            if blade && !r.blade { r.edges += 1 }
+            r.blade = blade
+            self.irCal = r
+        }
+    }
+
     // MARK: - Incoming lines
 
     private func handle(line: String) {
         if line.hasPrefix("TEL:") {
             parseTelemetry(String(line.dropFirst(4)))
+            return
+        }
+        if line.hasPrefix("IRCAL:") {           // 20 Hz stream: not shown in Messages
+            parseIRCal(String(line.dropFirst(6)))
             return
         }
         log("← \(line)")
@@ -240,10 +291,27 @@ final class PARMCOLink: NSObject, ObservableObject {
             case "log":    t.logging = v == "1"
             case "logt":   t.logSeconds = Double(v) ?? 0
             case "file":   t.logFile = v
+            case "ircal":  t.irCalActive = v == "1"
             default: break
             }
         }
         telemetry = t
+    }
+
+    private func parseIRCal(_ body: String) {
+        var r = irCal
+        r.received = true
+        for pair in body.split(separator: ";") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard kv.count == 2 else { continue }
+            switch kv[0] {
+            case "blade": r.blade = kv[1] == "1"
+            case "edges": r.edges = Int(kv[1]) ?? r.edges
+            case "rpm":   r.rpm = Double(kv[1]) ?? 0
+            default: break
+            }
+        }
+        irCal = r
     }
 
     static func describe(error line: String) -> String {
@@ -252,6 +320,7 @@ final class PARMCOLink: NSObject, ObservableObject {
         if line.hasPrefix("ERR:ENCODER") { return "Encoder not available" }
         if line.hasPrefix("ERR:STOP_FIRST") { return "Stop the motor first" }
         if line.hasPrefix("ERR:INVALID_ANGLE") { return "Invalid angle" }
+        if line.hasPrefix("ERR:IRCAL_ACTIVE") { return "IR sensor calibration is open — finish it first" }
         return line
     }
 
@@ -262,6 +331,7 @@ final class PARMCOLink: NSObject, ObservableObject {
 
     private func resetToDefaults() {
         telemetry = Telemetry()          // Manual, CW, 20 RPM, stopped, not calibrated
+        irCal = IRCalReading()
         lastError = nil
         lastEvent = nil
     }

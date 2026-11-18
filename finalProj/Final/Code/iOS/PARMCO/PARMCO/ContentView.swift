@@ -10,7 +10,8 @@
 //   encoder angle, calibration status), calibrate zero, set to zero, angle
 //   target, start/stop logging with indicator (file name + elapsed time),
 //   over-range unlock. Extras: mark button, live angle dial, feedback-hold
-//   toggle, message console, haptics.
+//   toggle, guided IR sensor calibration (IRCalibrationView.swift), message
+//   console, haptics.
 //
 
 import SwiftUI
@@ -26,6 +27,7 @@ struct ContentView: View {
     @State private var logLabel = ""
     @State private var localMessage: String?
     @State private var lastAngleTarget: Double?
+    @State private var showIRCal = false
     @FocusState private var focused: Bool
 
     private var t: Telemetry { link.telemetry }
@@ -383,6 +385,28 @@ struct ContentView: View {
                     Text("On by default. After a position move: coils off, encoder corrects if the blade leaves ±1°.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+            }
+            Divider()
+            Button {
+                tap()
+                showIRCal = true
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Calibrate IR sensor").bold()
+                        Text("Use if the IR RPM jumps around. Turns the motor off and walks you through setting the sensor's potentiometer.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showIRCal) {
+                IRCalibrationView()
+                    .environmentObject(link)
             }
         }
     }
