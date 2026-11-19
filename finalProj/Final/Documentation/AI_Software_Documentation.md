@@ -72,12 +72,35 @@ The Android app still receives the older `RPM_ACTUAL:`, `ENCODER_RPM:` and `ANGL
   window. The reading drops to 0 if no pulse arrives within 2.5 periods (at least 2 s).
 * **Encoder RPM.** The encoder is sampled at 100 Hz and its angle unwrapped. RPM is the angle
   change over a 0.5 s sliding window.
+* **Half stepping.** The motor is driven in half steps everywhere: 400 steps/rev, 0.9° per
+  step. Motion is smoother than full stepping (less low-speed resonance), and angle targets
+  are finer. `step_count` in the CSV log counts half steps; `step_angle_deg` is
+  `step_count × 0.9`. The half-step table walks the coil patterns in the opposite order to
+  the full-step table, so the clockwise assembly direction (`CW_ASM_DIR`) is 1, not 0.
 * **Position moves.** The error is target minus encoder angle, taking the shorter way round
-  (this handles the 359°/0° wrap). The motor steps that many full steps, waits 150 ms,
-  re-reads the encoder, and corrects if the error is still over 0.75 step (up to 4 tries).
+  (this handles the 359°/0° wrap). The motor steps that many half steps, waits 150 ms,
+  turns the coils off for 100 ms, re-reads the encoder, and corrects if the error is still
+  over 0.7° (up to 4 tries).
+* **Coils-off position readings.** On the bench, the energized coils' magnetic field
+  reached the AS5600 behind the motor and shifted its reading by several degrees. Moves
+  were stepping extra to "correct" a false error, so the blade landed about 5° past the
+  target in the direction of travel. In the hold, the true error then appeared with the
+  coils off, so the hold kept correcting (55 corrections in one session). Now every
+  encoder reading used to plan, check or hold a position is taken with the H-bridge
+  disabled (`RELEASE_S` = 0.1 s). The coils are re-energized on the pattern matching the
+  rotor's measured angle, so the rotor does not jump. The journal prints both readings
+  (`MOVE reading: coils on .., coils off .. (coil-field bias ..)`) as evidence.
+  RPM is unaffected: the bias repeats every 8 half steps and averages out over the 0.5 s
+  window.
+* **Angle resolution.** With the coils off, the rotor rests in a detent every full step
+  (1.8°), so angle targets are rounded to the nearest 1.8°. The blade lands within 0.9° of
+  any requested angle, and it does not slide when the coils release, which keeps it
+  inside the ±1° hold band. Motion between targets still uses half steps. With hold off,
+  the coils stay energized at the end of a move, and the app's angle shows the last
+  coils-off reading.
 * **Feedback hold.** After a set to zero or angle target, the H-bridge is disabled and the
   encoder is checked every 10 ms. If the blade leaves ±1° of the target (rounded to the
-  nearest full step), the coil pattern matching the rotor's current angle is applied, the
+  nearest detent, every 1.8°), the coil pattern matching the rotor's current angle is applied, the
   bridge is enabled, and the motor steps back to within 0.95°, then disables again. Each
   correction is reported as `EVT:HOLD_CORRECTION:n=..;err=..;ms=..` and logged.
 * **Maintain.** Encoder-derived RPM (IR as fallback) feeds a small PI trim on the step rate.

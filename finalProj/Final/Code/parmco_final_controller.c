@@ -27,6 +27,13 @@
  *     install.sh); the BLE server waits for the Bluetooth adapter to appear
  *   - CSV logs are given to the owner of the log folder (the service runs as
  *     root), and a log name is never reused
+ *   - half stepping everywhere (400 steps/rev, 0.9 deg): smoother angle moves
+ *     and finer targets; CW_ASM_DIR flipped to match the half-step table
+ *   - position readings with the coils OFF: the energized stator field at the
+ *     back of the motor biases the AS5600 by several degrees, which made moves
+ *     "correct" a false error (blade ~5 deg past the target) and the hold hunt.
+ *     Every encoder reading used to plan, check or hold a position is now taken
+ *     after the coils have been off for RELEASE_S; steps still run energized
  *   - IR sensor calibration mode (IRCAL:START / IRCAL:STOP): motor and hold
  *     off so the blade turns freely by hand; the live sensor state is streamed
  *     20 times a second (IRCAL:blade=0|1;edges=n;rpm=x) so the app can guide
@@ -79,11 +86,17 @@ extern unsigned int get_current_timer(void);
 #define PIN_D             23
 #define PIN_IR            13
 
-#define STEP_MODE         0          /* 0 = full step (200/rev) */
+/* Half stepping (final-check revision): 400 steps/rev, 0.9 deg per step, for
+   smoother motion and finer angle targets. Every angle calculation below uses
+   STEP_DEG / STEPS_PER_REV, so "step" means a half step throughout, and
+   step_count in the CSV log counts half steps. */
+#define STEP_MODE         1          /* 1 = half step (400/rev), 0 = full (200/rev) */
 /* Assembly step direction that turns the propeller clockwise (as seen by the
-   user). Set to 0 after bench test showed DIR:CW turning counter-clockwise. */
-#define CW_ASM_DIR        0
-#define STEPS_PER_REV     200
+   user). Full stepping needed 0 (bench test: DIR:CW turned counter-clockwise).
+   The half-step table walks the coil patterns in the opposite order to the
+   full-step table, so half stepping needs 1 for the same rotation. */
+#define CW_ASM_DIR        1
+#define STEPS_PER_REV     400
 #define STEP_DEG          (360.0f / STEPS_PER_REV)
 
 #define RPM_MIN           10.0f
@@ -95,7 +108,18 @@ extern unsigned int get_current_timer(void);
 #define FASTER_FACTOR     1.05f      /* ~5% per press */
 
 #define MOVE_SETTLE_S     0.15       /* wait after a move before reading encoder */
-#define MOVE_TOL_DEG      1.35f      /* correct again only if error > 0.75 step */
+#define MOVE_TOL_DEG      0.7f       /* correct again only if error > ~0.75 step */
+#define PROBE_STEPS       20         /* direction probe: 20 half steps = 18 deg */
+/* With the coils off the rotor rests in a detent every full step (1.8 deg), so
+   a half-step position slides ~0.9 deg when released. Position readings are
+   taken with the coils off (RELEASE_S), so angle targets are rounded to this
+   grid: the blade still moves in smooth half steps and lands within 0.9 deg of
+   any requested angle, and it stays put inside the +/-1 deg hold band. */
+#define DETENT_DEG        (2.0f * STEP_DEG)
+/* Coils-off time before a position reading. The energized coils' magnetic
+   field reaches the AS5600 behind the motor and shifts its reading by several
+   degrees, so position readings are taken with the H-bridge disabled. */
+#define RELEASE_S         0.10
 #define MOVE_MAX_ITER     4
 #define HOLD_BAND_DEG     1.0f       /* feedback hold band (+/-) */
 
@@ -260,22 +284,39 @@ static void apply_index(int idx)
     step_routine(1, STEP_MODE, motor_pins);
 }
 
-/* Energize the current pattern from standstill and record the phase reference. */
-static void coils_on(void)
+static int index_for_current_angle(void);
+
+static void energize(int idx)
 {
-    apply_index(get_step_index());          /* pins first (EN low -> outputs off) */
+    apply_index(idx);                        /* pins first (EN low -> outputs off) */
     enable_routine(PIN_ENABLE, 1);
     pthread_mutex_lock(&state_lock);
     coils_enabled = 1;
     pthread_mutex_unlock(&state_lock);
     sleep_s(0.03);                           /* let the rotor settle on the pattern */
+}
+
+/* Energize from standstill (coils off). Uses the coil pattern that matches the
+   rotor's present angle, so the rotor does not jump. The phase reference
+   (pattern <-> encoder angle) is measured once, with a coils-off reading,
+   because the energized coils bias the encoder. */
+static void coils_on(void)
+{
     pthread_mutex_lock(&enc_lock);
-    if (encoder_ok) {
-        phase_ref_idx = get_step_index();
+    int have_ref = phase_ref_valid;
+    pthread_mutex_unlock(&enc_lock);
+    energize(have_ref ? index_for_current_angle() : get_step_index());
+    if (!have_ref && encoder_ok) {
+        int idx = get_step_index();          /* rotor now sits on this pattern */
+        coils_off();
+        sleep_s(RELEASE_S);
+        pthread_mutex_lock(&enc_lock);
+        phase_ref_idx = idx;
         phase_ref_raw = enc_raw_deg;
         phase_ref_valid = 1;
+        pthread_mutex_unlock(&enc_lock);
+        energize(idx);
     }
-    pthread_mutex_unlock(&enc_lock);
 }
 
 /* Coil index whose equilibrium is closest to the rotor's present angle. */
@@ -379,8 +420,12 @@ static float ramp_toward(float cur, float target)
 }
 
 /* ---------------------------------------------------------------- moves */
-typedef enum { MV_PLAN, MV_STEP, MV_SETTLE } move_phase_t;
-static move_phase_t mv_phase = MV_PLAN;
+typedef enum { MV_RELEASE, MV_PLAN, MV_STEP, MV_SETTLE } move_phase_t;
+static move_phase_t mv_phase = MV_RELEASE;
+static double mv_release_until;
+static int    mv_have_pending, mv_pending_idx, mv_after_steps;
+static float  rest_angle = NAN;          /* last coils-off reading at the end of a move */
+static float  mv_energized_angle;
 
 static float  mv_target, mv_rpm, mv_cur;
 static int    mv_dir, mv_iter, mv_probe, mv_from_hold;
@@ -413,28 +458,98 @@ static void start_move(float target, float rpm, int from_hold)
     mv_probe = 0;
     mv_from_hold = from_hold;
     mv_t0 = now_s();
-    mv_phase = MV_PLAN;
+    mv_phase = MV_RELEASE;
+    mv_release_until = 0;
+    mv_have_pending = 0;
+    mv_after_steps = 0;
     mv_last_n = 0;
     mv_bad = 0;
     mv_probe_tries = 0;
     pthread_mutex_lock(&state_lock);
     activity = ACT_MOVE;
     mv_gen = cmd_generation;
-    if (!from_hold) cmd_angle = mv_target;
+    if (!from_hold) cmd_angle = mv_target;          /* the user's target, for the log */
+    /* end on a detent (see DETENT_DEG): position readings are taken with the
+       coils off, where the rotor always rests in a detent */
+    mv_target = wrap360(lroundf(mv_target / DETENT_DEG) * DETENT_DEG);
     pthread_mutex_unlock(&state_lock);
 }
 
-/* Returns 1 while the move is still in progress. */
+/* Turn the coils off (if on) so the next encoder reading is unbiased. If the
+   rotor was sitting on a coil pattern, that pattern becomes the new phase
+   reference once the reading is taken. */
+static void mv_begin_release(void)
+{
+    if (coils_enabled) {
+        mv_pending_idx = get_step_index();
+        mv_have_pending = 1;
+        coils_off();
+        mv_release_until = now_s() + RELEASE_S;
+    } else {
+        mv_release_until = now_s();
+    }
+    mv_phase = MV_RELEASE;
+}
+
+/* Returns 1 while the move is still in progress.
+   Steps run with the coils on; every encoder reading used to plan or check the
+   move is taken in MV_RELEASE/MV_PLAN with the coils off. */
 static int move_service(void)
 {
     switch (mv_phase) {
+    case MV_RELEASE: {
+        if (mv_release_until == 0) mv_begin_release();      /* first call of a move */
+        if (now_s() < mv_release_until) { usleep(2000); return 1; }
+        if (mv_have_pending) {
+            pthread_mutex_lock(&enc_lock);
+            phase_ref_idx = mv_pending_idx;
+            phase_ref_raw = enc_raw_deg;
+            phase_ref_valid = encoder_ok;
+            pthread_mutex_unlock(&enc_lock);
+            mv_have_pending = 0;
+        }
+        if (mv_after_steps) {
+            float off = read_angle();
+            printf("MOVE reading: coils on %.2f, coils off %.2f (coil-field bias %+.2f deg)\n",
+                   mv_energized_angle, off, wrap180(mv_energized_angle - off));
+            mv_after_steps = 0;
+            if (mv_probe) {
+                float d = wrap180(off - mv_probe_angle);
+                printf("MOVE probe: %d steps asm_dir 1 -> encoder moved %+.2f deg\n", PROBE_STEPS, d);
+                if (fabsf(d) >= 0.4f * PROBE_STEPS * STEP_DEG) {
+                    pthread_mutex_lock(&state_lock);
+                    enc_sign = (d > 0) ? 1 : -1;
+                    if (enc_sign < 0) step_count = -step_count;
+                    pthread_mutex_unlock(&state_lock);
+                    printf("Learned encoder direction: asm dir 1 -> angle %s\n",
+                           enc_sign > 0 ? "increases" : "decreases");
+                } else if (mv_probe_tries >= 2) {
+                    mv_probe = 0;
+                    notify_event("EVT:MOVE_FAILED:encoder_not_tracking;moved=%.2f", d);
+                    pthread_mutex_lock(&state_lock);
+                    activity = ACT_IDLE;
+                    pthread_mutex_unlock(&state_lock);
+                    mv_phase = MV_RELEASE;
+                    return 0;
+                }
+                mv_probe = 0;                          /* PLAN probes again if needed */
+            } else {
+                mv_iter++;                             /* PLAN re-checks the error */
+            }
+        }
+        mv_phase = MV_PLAN;
+        return 1;
+    }
     case MV_PLAN: {
-        if (!coils_enabled) { coils_on(); next_deadline = get_current_timer(); }
+        /* coils are off here: the encoder reading is free of coil-field bias */
+        rest_angle = read_angle();
         if (enc_sign == 0) {                       /* learn direction with a short probe */
             mv_probe = 1;
             mv_probe_angle = read_angle();
+            coils_on();
+            next_deadline = get_current_timer();
             mv_dir = 1;
-            mv_left = 10;
+            mv_left = PROBE_STEPS;
             mv_cur = mv_probe_tries ? 12.0f : (RPM_START < mv_rpm ? RPM_START : mv_rpm);
             mv_probe_tries++;
             mv_phase = MV_STEP;
@@ -464,12 +579,7 @@ static int move_service(void)
         float tol = mv_from_hold ? 0.95f * HOLD_BAND_DEG : MOVE_TOL_DEG;
         int failed = (mv_bad >= 2) || (mv_iter >= MOVE_MAX_ITER && fabsf(err) > tol);
         if (n == 0 || (mv_iter > 0 && fabsf(err) <= tol) || mv_iter >= MOVE_MAX_ITER || failed) {
-            /* done */
-            pthread_mutex_lock(&enc_lock);
-            phase_ref_idx = get_step_index();
-            phase_ref_raw = enc_raw_deg;
-            phase_ref_valid = encoder_ok;
-            pthread_mutex_unlock(&enc_lock);
+            /* done (coils are off) */
             double dur = now_s() - mv_t0;
             if (mv_from_hold) {
                 pthread_mutex_lock(&state_lock);
@@ -490,16 +600,16 @@ static int move_service(void)
             hold = hold_enabled;
             pthread_mutex_unlock(&state_lock);
             if (hold) {
-                coils_off();
                 pthread_mutex_lock(&state_lock);
-                activity = ACT_HOLD;
+                activity = ACT_HOLD;                  /* coils stay off; encoder watches */
                 pthread_mutex_unlock(&state_lock);
             } else {
+                coils_on();                           /* hold the position energized */
                 pthread_mutex_lock(&state_lock);
-                activity = ACT_IDLE;                  /* coils stay energized */
+                activity = ACT_IDLE;
                 pthread_mutex_unlock(&state_lock);
             }
-            mv_phase = MV_PLAN;
+            mv_phase = MV_RELEASE;
             return 0;
         }
         mv_left = n;
@@ -510,6 +620,7 @@ static int move_service(void)
         printf("MOVE iter %d: angle %.2f err %+.2f -> %ld steps asm_dir %d (sign %+d)\n",
                mv_iter, now_angle, err, n, mv_dir, enc_sign);
         mv_cur = RPM_START < mv_rpm ? RPM_START : mv_rpm;
+        coils_on();                                /* pattern matching the rotor, no jump */
         next_deadline = get_current_timer();
         mv_phase = MV_STEP;
         return 1;
@@ -530,30 +641,9 @@ static int move_service(void)
     }
     case MV_SETTLE:
         if (now_s() < mv_settle_until) { usleep(2000); return 1; }
-        if (mv_probe) {
-            float d = wrap180(read_angle() - mv_probe_angle);
-            printf("MOVE probe: 10 steps asm_dir 1 -> encoder moved %+.2f deg\n", d);
-            if (fabsf(d) >= 7.0f) {
-                pthread_mutex_lock(&state_lock);
-                enc_sign = (d > 0) ? 1 : -1;
-                if (enc_sign < 0) step_count = -step_count;
-                pthread_mutex_unlock(&state_lock);
-                printf("Learned encoder direction: asm dir 1 -> angle %s\n",
-                       enc_sign > 0 ? "increases" : "decreases");
-            } else if (mv_probe_tries >= 2) {
-                mv_probe = 0;
-                notify_event("EVT:MOVE_FAILED:encoder_not_tracking;moved=%.2f", d);
-                pthread_mutex_lock(&state_lock);
-                activity = ACT_IDLE;
-                pthread_mutex_unlock(&state_lock);
-                mv_phase = MV_PLAN;
-                return 0;
-            }
-            mv_probe = 0;                              /* PLAN probes again if needed */
-        } else {
-            mv_iter++;                                 /* PLAN re-checks the error */
-        }
-        mv_phase = MV_PLAN;
+        mv_energized_angle = read_angle();         /* biased: logged for comparison */
+        mv_after_steps = 1;
+        mv_begin_release();
         return 1;
     }
     return 1;
@@ -756,16 +846,12 @@ static void *motor_thread(void *arg)
             double t = now_s();
             if (t >= hold_check) {
                 hold_check = t + 0.01;
-                float reach = wrap360(lroundf(htarget / STEP_DEG) * STEP_DEG);
+                float reach = wrap360(lroundf(htarget / DETENT_DEG) * DETENT_DEG);
                 float err = wrap180(read_angle() - reach);
                 if (fabsf(err) > HOLD_BAND_DEG && enc_sign != 0) {
-                    /* re-align the coil pattern with where the rotor is now,
-                       then step back to the target (spec: feedback hold item 4) */
-                    apply_index(index_for_current_angle());
-                    enable_routine(PIN_ENABLE, 1);
-                    pthread_mutex_lock(&state_lock);
-                    coils_enabled = 1;
-                    pthread_mutex_unlock(&state_lock);
+                    /* step back to the target (spec: feedback hold item 4). The
+                       move energizes the coil pattern matching where the rotor
+                       is now (coils-off reading), so there is no jump. */
                     start_move(reach, RPM_START, 1);
                     continue;
                 }
@@ -1025,6 +1111,9 @@ static void build_telemetry(char *buf, size_t n)
     float ea = enc_angle, er = enc_rpm;
     int eok = encoder_ok;
     pthread_mutex_unlock(&enc_lock);
+    /* Energized and standing still (hold off after a move): the live reading is
+       biased by the coils' field, so report the coils-off reading instead. */
+    if (en && act == ACT_IDLE && !isnan(rest_angle)) ea = rest_angle;
 
     pthread_mutex_lock(&log_lock);
     int logging = log_fp != NULL;
@@ -1248,6 +1337,7 @@ static void process_line(source_t src, const char *raw)
         pthread_mutex_lock(&enc_lock);
         enc_zero_raw = enc_raw_deg;
         enc_angle = 0;
+        rest_angle = NAN;
         enc_cum = 0;
         enc_fresh = 0;
         pthread_mutex_unlock(&enc_lock);
@@ -1466,7 +1556,7 @@ int main(int argc, char **argv)
     if (as5600_init() == 0) { encoder_ok = 1; printf("AS5600 encoder ready\n"); }
     else printf("AS5600 encoder unavailable (position functions disabled)\n");
 
-    printf("PARMCO final controller: step mode FULL (%d steps/rev), timer %u Hz\n",
+    printf("PARMCO final controller: step mode HALF (%d steps/rev), timer %u Hz\n",
            STEPS_PER_REV, timer_freq);
     printf("Defaults: Manual, CW, %.0f RPM, stopped, not calibrated, feedback hold %s%s\n",
            RPM_DEFAULT, hold_default ? "ON" : "OFF", enc_polarity < 0 ? ", encoder inverted" : "");
